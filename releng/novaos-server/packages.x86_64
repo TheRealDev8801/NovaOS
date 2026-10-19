@@ -9,6 +9,9 @@ mkinitcpio-archiso
 grub
 efibootmgr
 syslinux
+memtest86+
+memtest86+-efi
+edk2-shell
 dosfstools
 mtools
 squashfs-tools
