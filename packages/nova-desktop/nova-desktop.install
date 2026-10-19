@@ -1,0 +1,26 @@
+# shellcheck shell=bash
+# Install-script messages for nova-desktop (metapackage).
+
+post_install() {
+  cat <<'EOF'
+  Nova Desktop (Plasma Nova) installed.
+
+  Log out and pick the "Plasma" session in SDDM to enter Nova Desktop.
+
+  Look & feel : Nova  (org.nova.desktop)
+  Color scheme: Nova
+  Wallpaper   : nova-starlight
+
+  First-run tips:
+    - Set your wallpaper from nova-starlight (systemsettings > Appearance)
+    - Gaming extras:  pacman -S nova-goodies-gaming
+EOF
+}
+
+post_upgrade() {
+  post_install
+}
+
+pre_remove() {
+  true
+}

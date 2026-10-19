@@ -13,13 +13,15 @@ build() {
 
 case "${1:-}" in
   gaming) build "novaos-gaming" ;;
+  plasma) build "novaos-plasma" ;;
   server) build "novaos-server" ;;
   all)
     build "novaos-gaming"
+    build "novaos-plasma"
     build "novaos-server"
     ;;
   *)
-    echo "Usage: $0 {gaming|server|all}" >&2
+    echo "Usage: $0 {gaming|plasma|server|all}" >&2
     exit 1
     ;;
 esac

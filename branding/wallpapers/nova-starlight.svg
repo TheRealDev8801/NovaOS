@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="NovaOS starlight wallpaper">
+  <defs>
+    <radialGradient id="bg" cx="70%" cy="35%" r="85%">
+      <stop offset="0%" stop-color="#141c3a"/>
+      <stop offset="45%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#05070f"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6ee7ff" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#a78bfa" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eafcff"/>
+      <stop offset="45%" stop-color="#6ee7ff"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- starfield -->
+  <g fill="#e8ecf8">
+    <circle cx="120" cy="140" r="1.6" opacity="0.9"/>
+    <circle cx="260" cy="420" r="1.1" opacity="0.6"/>
+    <circle cx="180" cy="760" r="1.4" opacity="0.7"/>
+    <circle cx="420" cy="220" r="1.0" opacity="0.5"/>
+    <circle cx="520" cy="880" r="1.7" opacity="0.8"/>
+    <circle cx="680" cy="160" r="1.2" opacity="0.6"/>
+    <circle cx="760" cy="620" r="1.0" opacity="0.5"/>
+    <circle cx="900" cy="300" r="1.5" opacity="0.75"/>
+    <circle cx="1040" cy="820" r="1.2" opacity="0.6"/>
+    <circle cx="1180" cy="180" r="1.6" opacity="0.85"/>
+    <circle cx="1320" cy="520" r="1.1" opacity="0.55"/>
+    <circle cx="1460" cy="240" r="1.4" opacity="0.7"/>
+    <circle cx="1580" cy="780" r="1.2" opacity="0.6"/>
+    <circle cx="1700" cy="380" r="1.7" opacity="0.8"/>
+    <circle cx="1800" cy="900" r="1.1" opacity="0.5"/>
+    <circle cx="340" cy="980" r="1.3" opacity="0.65"/>
+    <circle cx="980" cy="1000" r="1.2" opacity="0.6"/>
+    <circle cx="1420" cy="1020" r="1.4" opacity="0.7"/>
+    <circle cx="600" cy="360" r="0.9" opacity="0.45"/>
+    <circle cx="1160" cy="640" r="0.9" opacity="0.45"/>
+    <circle cx="60" cy="540" r="1.0" opacity="0.5"/>
+    <circle cx="1880" cy="120" r="1.2" opacity="0.6"/>
+  </g>
+
+  <!-- nova star -->
+  <g transform="translate(1340 400)">
+    <circle r="320" fill="url(#glow)" filter="url(#soft)"/>
+    <path d="M0 -210 L36 -36 L210 0 L36 36 L0 210 L-36 36 L-210 0 L-36 -36 Z" fill="url(#star)" opacity="0.96"/>
+    <circle r="26" fill="#ffffff" opacity="0.95"/>
+  </g>
+</svg>

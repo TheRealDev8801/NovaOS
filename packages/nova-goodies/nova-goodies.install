@@ -1,0 +1,27 @@
+# shellcheck shell=bash
+# Install-script messages for nova-goodies (metapackage).
+
+post_install() {
+  cat <<'EOF'
+  NovaOS Goodies installed.
+
+  Quick tour:
+    fastfetch        system info, pretty
+    btop             resource monitor
+    neovim           editor
+    fish             shell
+    mpv              media player
+
+  Want more?
+    pacman -S nova-goodies-gaming   gaming extras
+    pacman -S nova-goodies-dev      development tooling
+EOF
+}
+
+post_upgrade() {
+  post_install
+}
+
+pre_remove() {
+  true
+}

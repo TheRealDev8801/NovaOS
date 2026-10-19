@@ -27,7 +27,7 @@ build() {
 }
 
 case "${1:-}" in
-  gaming|server|all) build "$1" ;;
+  gaming|server|plasma|all) build "$1" ;;
   *)
     echo "Usage: $0 {gaming|server|all}" >&2
     exit 1

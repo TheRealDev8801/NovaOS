@@ -1,0 +1,45 @@
+# Maintainer: NovaOS <https://novaos.aibotv2-hosting.biz>
+pkgname=nova-desktop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Nova Desktop (Plasma Nova) — branded KDE Plasma session for NovaOS"
+arch=('any')
+url="https://novaos.aibotv2-hosting.biz"
+license=('MIT')
+depends=(
+  'plasma-meta'
+  'sddm'
+  'konsole'
+  'dolphin'
+  'kate'
+  'ark'
+  'spectacle'
+  'kde-gtk-config'
+  'breeze-gtk'
+  'xdg-desktop-portal-kde'
+  'powerdevil'
+  'kwallet'
+  'kwallet-pam'
+  'pipewire'
+  'pipewire-pulse'
+  'pipewire-alsa'
+  'wireplumber'
+  'noto-fonts'
+  'noto-fonts-emoji'
+  'ttf-liberation'
+)
+optdepends=(
+  'nova-goodies: curated extra applications'
+  'nova-goodies-gaming: gaming extras'
+)
+# Metapackage: the desktop itself comes from KDE packages; Nova ships branding
+# and defaults via the branding/ tree in this repository.
+install=nova-desktop.install
+
+build() {
+  true
+}
+
+package() {
+  true
+}
