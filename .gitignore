@@ -1,0 +1,9 @@
+# Build artifacts
+out/
+work/
+*.iso
+*.img
+
+# Editor/OS cruft
+*.swp
+.DS_Store

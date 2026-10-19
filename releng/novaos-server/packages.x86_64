@@ -1,0 +1,40 @@
+# NovaOS Server — base system
+base
+linux
+linux-firmware
+mkinitcpio
+mkinitcpio-archiso
+
+# Boot & installer tooling
+grub
+efibootmgr
+syslinux
+dosfstools
+mtools
+squashfs-tools
+parted
+gptfdisk
+e2fsprogs
+btrfs-progs
+xfsprogs
+cryptsetup
+lvm2
+nvme-cli
+smartmontools
+
+# Essentials
+nano
+sudo
+less
+bash-completion
+networkmanager
+openssh
+rsync
+zsh
+
+# Containers & virtualization
+docker
+podman
+buildah
+skopeo
+qemu-guest-agent

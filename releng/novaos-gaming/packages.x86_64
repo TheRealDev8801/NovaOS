@@ -1,0 +1,51 @@
+# NovaOS Gaming — base system
+base
+linux
+linux-firmware
+mkinitcpio
+mkinitcpio-archiso
+
+# Boot & installer tooling
+grub
+efibootmgr
+syslinux
+memtest86+
+dosfstools
+mtools
+squashfs-tools
+parted
+gptfdisk
+e2fsprogs
+btrfs-progs
+xfsprogs
+cryptsetup
+lvm2
+nvme-cli
+smartmontools
+
+# Essentials
+nano
+sudo
+less
+bash-completion
+networkmanager
+openssh
+rsync
+zsh
+
+# Gaming stack
+mesa
+vulkan-radeon
+vulkan-intel
+vulkan-tools
+lib32-mesa
+lib32-vulkan-radeon
+lib32-vulkan-intel
+gamemode
+lib32-gamemode
+mangohud
+lib32-mangohud
+gamescope
+steam
+wine
+winetricks
