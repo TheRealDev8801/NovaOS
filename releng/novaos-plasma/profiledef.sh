@@ -18,5 +18,8 @@ bootstrap_tarball_compression=('zstd' '-c' '-T0' '--long' '-19')
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
   ["/root"]="0:0:750"
-  ["/home/nova"]="1000:1000:700"
 )
+# NOTE: /home/nova is intentionally not listed here — it does not exist in the
+# airootfs tree and archiso rejects permission entries for missing paths.
+# The live user's home is created at boot by
+# airootfs/usr/lib/tmpfiles.d/nova-home.conf (0700 nova:nova).
