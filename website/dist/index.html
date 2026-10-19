@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovaOS — The Arch-powered OS for gamers and servers</title>
+<meta name="description" content="NovaOS is an Arch Linux-based operating system built for gaming and servers. Rolling release, pacman, latest kernel, Mesa, Vulkan, Proton and containers — no assembly required.">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJOb3ZhT1MgbG9nbyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNmVlN2ZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2E3OGJmYSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzAiIGZpbGw9IiMwYjEwMjAiIHN0cm9rZT0iIzFlMjc0OCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTMyIDYgTDM3IDI3IEw1OCAzMiBMMzcgMzcgTDMyIDU4IEwyNyAzNyBMNiAzMiBMMjcgMjcgWiIgZmlsbD0idXJsKCNnKSIvPgo8L3N2Zz4K" type="image/svg+xml">
+<style>
+:root {
+  --bg: #070b16;
+  --bg-alt: #0b1020;
+  --card: #101733;
+  --text: #e8ecf8;
+  --muted: #9aa5c4;
+  --accent: #6ee7ff;
+  --accent-2: #a78bfa;
+  --border: #1e2748;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(167, 139, 250, .18), transparent 60%),
+    radial-gradient(900px 500px at 10% 0%, rgba(110, 231, 255, .14), transparent 55%);
+  background-repeat: no-repeat;
+  color: var(--text);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  width: min(1080px, 92vw);
+  margin: 0 auto;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  background: rgba(7, 11, 22, .78);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .8rem 0;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.brand:hover { text-decoration: none; }
+.brand strong {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-logo { display: block; }
+
+nav { display: flex; gap: 1.1rem; flex-wrap: wrap; align-items: center; }
+nav a { color: var(--muted); font-size: .95rem; }
+nav a:hover { color: var(--text); text-decoration: none; }
+nav a.github { color: var(--text); font-weight: 600; }
+
+/* Hero */
+.hero {
+  padding: 6rem 0 4.5rem;
+  text-align: center;
+}
+
+.eyebrow {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: .3rem .8rem;
+  font-size: .78rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(110, 231, 255, .06);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 5.5rem);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+}
+.hero h1 span {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tagline {
+  font-size: clamp(1.1rem, 2.6vw, 1.5rem);
+  color: var(--text);
+  margin: 1.2rem auto .4rem;
+  max-width: 46ch;
+}
+.tagline strong { color: var(--accent); }
+
+.sub { color: var(--muted); max-width: 52ch; margin: 0 auto 2rem; }
+
+.cta { display: flex; gap: .9rem; justify-content: center; flex-wrap: wrap; }
+
+.btn {
+  display: inline-block;
+  padding: .8rem 1.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.btn:hover { text-decoration: none; transform: translateY(-2px); }
+
+.btn.primary {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #06101c;
+  box-shadow: 0 8px 24px rgba(110, 231, 255, .25);
+}
+.btn.ghost {
+  color: var(--text);
+  border-color: var(--border);
+  background: rgba(255, 255, 255, .02);
+}
+
+/* Sections */
+.section { padding: 4.5rem 0; }
+.section.alt { background: var(--bg-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+.section h2 {
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  margin: 0 0 .4rem;
+  text-align: center;
+}
+.section-sub { text-align: center; color: var(--muted); margin: 0 auto 2.5rem; max-width: 50ch; }
+
+.grid { display: grid; gap: 1.2rem; margin-top: 2.5rem; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.8rem;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.card:hover { transform: translateY(-3px); border-color: rgba(110, 231, 255, .45); }
+
+.card-icon { font-size: 2rem; }
+.card h3 { margin: .6rem 0 .4rem; font-size: 1.35rem; }
+.card p { color: var(--muted); margin: 0 0 1rem; }
+.card ul { margin: 0; padding-left: 1.1rem; color: var(--text); }
+.card li { margin: .3rem 0; }
+
+.feature {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem;
+}
+.feature h4 { margin: 0 0 .35rem; font-size: 1.05rem; }
+.feature p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+/* Timeline */
+.timeline {
+  list-style: none;
+  margin: 2.5rem auto 0;
+  padding: 0;
+  max-width: 640px;
+  border-left: 2px solid var(--border);
+}
+.timeline li {
+  position: relative;
+  padding: 0 0 1.8rem 1.6rem;
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: .35rem;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--border);
+}
+.timeline li.done::before { background: var(--accent); border-color: var(--accent); }
+.timeline li.current::before { background: var(--accent-2); border-color: var(--accent-2); box-shadow: 0 0 0 5px rgba(167, 139, 250, .18); }
+.timeline h4 { margin: 0 0 .2rem; }
+.timeline p { margin: 0; color: var(--muted); }
+.timeline li.done h4::after { content: " ✓"; color: var(--accent); }
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2.5rem 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: .95rem;
+}
+footer p { margin: .3rem 0; }
+.muted { color: var(--muted); }
+
+@media (max-width: 600px) {
+  .hero { padding: 4rem 0 3rem; }
+  .section { padding: 3.2rem 0; }
+}
+
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="#top">
+      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJOb3ZhT1MgbG9nbyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNmVlN2ZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2E3OGJmYSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzAiIGZpbGw9IiMwYjEwMjAiIHN0cm9rZT0iIzFlMjc0OCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTMyIDYgTDM3IDI3IEw1OCAzMiBMMzcgMzcgTDMyIDU4IEwyNyAzNyBMNiAzMiBMMjcgMjcgWiIgZmlsbD0idXJsKCNnKSIvPgo8L3N2Zz4K" alt="" class="brand-logo" width="28" height="28">
+      <span>Nova<strong>OS</strong></span>
+    </a>
+    <nav>
+      <a href="#editions">Editions</a>
+      <a href="#features">Features</a>
+      <a href="#roadmap">Roadmap</a>
+      <a class="github" href="https://github.com/TheRealDev8801/NovaOS">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow">Arch Linux · Rolling Release</p>
+      <h1>Nova<span>OS</span></h1>
+      <p class="tagline">The Arch-powered operating system for <strong>gamers</strong> and <strong>servers</strong>.</p>
+      <p class="sub">Latest kernel. Mesa + Vulkan. Proton-ready. Container-ready. No assembly required.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/TheRealDev8801/NovaOS">View on GitHub</a>
+        <a class="btn ghost" href="#roadmap">Downloads — coming soon</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="editions" class="section">
+    <div class="container">
+      <h2>Two editions. One foundation.</h2>
+      <p class="section-sub">Built on Arch Linux — the same rolling-release base the pros use.</p>
+      <div class="grid two">
+        <article class="card">
+          <div class="card-icon">🎮</div>
+          <h3>NovaOS Gaming</h3>
+          <p>Out-of-the-box performance for desktops, handhelds and consoles.</p>
+          <ul>
+            <li>Latest kernel &amp; linux-firmware</li>
+            <li>Mesa, Vulkan and 32-bit multilib</li>
+            <li>Steam, Wine, GameMode, MangoHud, Gamescope</li>
+            <li>Low-latency, high-FPS defaults</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="card-icon">🖥️</div>
+          <h3>NovaOS Server</h3>
+          <p>Minimal, container-ready, always up to date.</p>
+          <ul>
+            <li>Rolling security patches</li>
+            <li>Docker, Podman, Buildah, Skopeo</li>
+            <li>SSH &amp; networking out of the box</li>
+            <li>Headless-first, small footprint</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="section alt">
+    <div class="container">
+      <h2>Why NovaOS?</h2>
+      <div class="grid three">
+        <article class="feature">
+          <h4>⚡ Rolling release</h4>
+          <p>Always the newest kernel, drivers and security patches — never a stale system.</p>
+        </article>
+        <article class="feature">
+          <h4>📦 pacman + AUR</h4>
+          <p>The full Arch ecosystem: 15,000+ official packages and the entire AUR.</p>
+        </article>
+        <article class="feature">
+          <h4>🎯 Purpose-built profiles</h4>
+          <p>A tuned gaming stack and a lean server set — no bloat you didn't ask for.</p>
+        </article>
+        <article class="feature">
+          <h4>🐳 Containers first</h4>
+          <p>Docker, Podman and friends ready on the server edition from first boot.</p>
+        </article>
+        <article class="feature">
+          <h4>🔒 Open source</h4>
+          <p>Every profile, package list and build script is public on GitHub.</p>
+        </article>
+        <article class="feature">
+          <h4>🚀 Reproducible builds</h4>
+          <p>Standard archiso profiles — build the ISO yourself with one command.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap" class="section">
+    <div class="container">
+      <h2>Roadmap</h2>
+      <ol class="timeline">
+        <li class="done">
+          <h4>v0.1 — Foundation</h4>
+          <p>Arch base, gaming and server package sets, project scaffold.</p>
+        </li>
+        <li class="current">
+          <h4>v1.0 — First releases</h4>
+          <p>NovaOS Gaming and Server ISOs, test-booted and released.</p>
+        </li>
+        <li>
+          <h4>v1.x — Growth</h4>
+          <p>Hardware certification, performance tuning, community repos.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p><strong>NovaOS</strong> — <a href="https://novaos.aibotv2-hosting.biz">novaos.aibotv2-hosting.biz</a></p>
+    <p class="muted">Built on Arch Linux · Source on <a href="https://github.com/TheRealDev8801/NovaOS">GitHub</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
