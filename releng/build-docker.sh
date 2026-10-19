@@ -14,6 +14,7 @@ build() {
   local target="$1"
   echo "==> Building NovaOS ISO via Docker: ${target}"
   docker run --rm --privileged \
+    --cpus "${NOVAOS_BUILD_CPUS:-2}" \
     -v "$(pwd)/..:/novaos" \
     archlinux:latest \
     bash -c '
