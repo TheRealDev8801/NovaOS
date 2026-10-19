@@ -5,10 +5,15 @@
 # forbids mounting devtmpfs. pacstrap/arch-chroot use devtmpfs for the chroot
 # /dev, so we patch them to rbind the container's /dev instead.
 #
-# Usage: ./build-docker.sh {gaming|server|all}
+# Usage: ./build-docker.sh {gaming|plasma|server|all}
 set -euo pipefail
 
 cd "$(dirname "$0")"
+
+# Persist downloaded packages between builds (a Plasma build pulls ~1.8 GiB of
+# packages, so caching turns a rebuild from a download into a warm install).
+CACHE="${NOVAOS_PACMAN_CACHE:-$HOME/.cache/novaos-docker/pacman}"
+mkdir -p "$CACHE"
 
 build() {
   local target="$1"
@@ -16,6 +21,7 @@ build() {
   docker run --rm --privileged \
     --cpus "${NOVAOS_BUILD_CPUS:-2}" \
     -v "$(pwd)/..:/novaos" \
+    -v "$CACHE:/var/cache/pacman/pkg" \
     archlinux:latest \
     bash -c '
       set -e
@@ -29,7 +35,7 @@ build() {
 case "${1:-}" in
   gaming|server|plasma|all) build "$1" ;;
   *)
-    echo "Usage: $0 {gaming|server|all}" >&2
+    echo "Usage: $0 {gaming|plasma|server|all}" >&2
     exit 1
     ;;
 esac
