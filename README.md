@@ -32,8 +32,8 @@ No assembly required.
 
 ## Links
 
-- **Website**: coming soon. 
+- **Website**: https://novaos.aibotv2-hosting.biz 
 
 ## License
 
-TBD
+© All rights reserved, Nova Team & Ai bot V2 Hosting Team.
