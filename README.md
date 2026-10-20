@@ -16,7 +16,7 @@ No assembly required.
 | Edition | Target | Highlights |
 |---|---|---|
 | **NovaOS Gaming** | Desktops, handhelds, consoles | Optimized kernel, gaming toolchain, performance tweaks |
-| **NovaOS Plasma** | Desktops, laptops, VMs (QEMU/SPICE) | Plasma Nova desktop + full gaming stack + VM guest support |
+| **NovaOS Plasma** | Desktops, laptops, VMs (QEMU/SPICE) | Lean Plasma Nova desktop + curated goodies + VM guest support |
 | **NovaOS Server** | Bare metal, VPS, homelabs | Minimal footprint, containers, systemd services |
 
 ## Base

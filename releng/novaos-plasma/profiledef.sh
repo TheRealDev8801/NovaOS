@@ -13,9 +13,10 @@ bootmodes=('bios.syslinux'
            'uefi.systemd-boot')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-# xz (not zstd) keeps the Plasma ISO comfortably under the 2 GiB GitHub
-# release asset limit, so it can ship as a single downloadable file.
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M')
+# Match stock archiso: zstd with default 128K block size. NovaOS previously
+# used '-b 1M' (and xz for Plasma), which produced images that failed to mount
+# at switch-root under Android/QEMU while stock Arch booted fine.
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15')
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--long' '-19')
 file_permissions=(
   ["/etc/shadow"]="0:0:400"

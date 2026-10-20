@@ -1,4 +1,14 @@
-# NovaOS Plasma — base system
+# NovaOS Plasma — Nova Desktop (lean Plasma + goodies)
+#
+# Design goals:
+#   * A complete, usable Plasma Nova desktop that boots in VMs (QEMU/Vectras).
+#   * No Gaming stack here (steam/wine/gamescope/lib32-*) — that lives in the
+#     NovaOS Gaming edition. Drops ~600 MB-1 GB from the image.
+#   * plasma-desktop (not plasma-meta) plus a hand-picked set of Plasma
+#     components and KDE apps, so we keep the desktop functional without
+#     pulling discover/flatpak/krdp/kup/plasma-vault/print-manager/knighttime.
+
+# Base system
 base
 linux
 linux-firmware
@@ -35,44 +45,58 @@ openssh
 rsync
 zsh
 
-# Plasma Nova desktop
-plasma-meta
-sddm
+# Plasma Nova desktop core (plasma-desktop, not plasma-meta)
+# plasma-desktop already pulls plasma-workspace, systemsettings, kwin,
+# xdg-desktop-portal-kde, polkit-kde-agent, powerdevil, breeze, etc.
+plasma-desktop
+kscreen
+kwallet
+kwallet-pam
+kwalletmanager
+kde-cli-tools
+kglobalacceld
+
+# Hand-picked goodies that make the desktop feel complete
+plasma-nm
+plasma-pa
+kdeplasma-addons
+kinfocenter
+ksystemstats
+plasma-systemmonitor
+ksshaskpass
+kde-gtk-config
+breeze-gtk
 konsole
 dolphin
 kate
 ark
 spectacle
-kde-gtk-config
-breeze-gtk
-xdg-desktop-portal-kde
-powerdevil
-kwallet
-kwallet-pam
+gwenview
+okular
+kcalc
+ffmpegthumbs
+kdegraphics-thumbnailers
+kdialog
+
+# Display manager
+sddm
+
+# Audio
 pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+
+# Fonts
 noto-fonts
 noto-fonts-emoji
 ttf-liberation
 
-# Gaming stack
+# Graphics (user-space; VM-friendly)
 mesa
 vulkan-radeon
 vulkan-intel
 vulkan-tools
-lib32-mesa
-lib32-vulkan-radeon
-lib32-vulkan-intel
-gamemode
-lib32-gamemode
-mangohud
-lib32-mangohud
-gamescope
-steam
-wine
-winetricks
 
 # QEMU / VM guest support (Android & desktop QEMU, KVM, SPICE)
 qemu-guest-agent

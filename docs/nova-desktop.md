@@ -26,6 +26,23 @@ branded end-to-end — login, bar, launcher, notifications, theme, wallpaper, so
 `novaos-plasma` ISO profile (VM/QEMU-friendly). **B (Hypr Nova)** is the
 v1.x experiment. See `docs/qemu-android.md` for running it in QEMU.
 
+### Lean by design (v0.1)
+
+The `novaos-plasma` profile builds a **lean** Plasma Nova desktop, not a full
+KDE suite:
+
+- `plasma-desktop` (not `plasma-meta`) + hand-picked components
+  (`plasma-nm`, `plasma-pa`, `kscreen`, `kdeplasma-addons`, `kinfocenter`,
+  `plasma-systemmonitor`, `ksshaskpass`, `powerdevil`, `kwallet`, …).
+- Curated goodies: `konsole`, `dolphin`, `kate`, `ark`, `spectacle`,
+  `gwenview`, `okular`, `kcalc`, thumbnailers.
+- **No Gaming stack** (steam/wine/gamescope/mangohud/lib32-\*) — that belongs to
+  NovaOS Gaming. This keeps the ISO around ~1 GB instead of ~2 GB.
+- Deliberately omitted: `discover`/flatpak, `krdp`, `kup`, `plasma-vault`,
+  `print-manager`, `knighttime`.
+- VM guest support kept (`qemu-guest-agent`, `spice-vdagent`, `xf86-video-qxl`)
+  so it runs well under QEMU/Vectras.
+
 ### Brand surface (the "Nova" feel)
 
 - Palette: deep space `#070b16` → cyan `#6ee7ff` → violet `#a78bfa`
