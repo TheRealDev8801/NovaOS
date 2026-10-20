@@ -1,6 +1,6 @@
 # NovaOS
 
-**The most magical all-in-one Operating System Linux. Arch-powered operating system for gamers and servers.**
+**The most magical all-in-one Operating System based on Linux. Arch-powered operating system for gamers and servers.**
 
 ## Vision
 
