@@ -115,3 +115,25 @@ IP if the client is a separate app. Notes:
 | QXL display driver | `xf86-video-qxl` |
 | VirtIO disk/net/GPU | in-kernel modules (linux) |
 | 3D acceleration | `mesa` + VirGL (`virtio-vga-gl`) |
+
+## Vectras VM (Android)
+
+Vectras on Android typically runs QEMU with TCG (no KVM). Key notes:
+
+- **Use the right ISO**: `novagos-plasma-*.iso` for a full KDE Plasma desktop (autologin as user `nova`). The `novagos-gaming-*.iso` is a console/live installer environment with no desktop — if you only see a TTY/login prompt, that's expected.
+- **Machine type**: `q35` or `pc-i440fx-7.2` usually work. Avoid exotic machine types.
+- **CPU**: `max` or `qemu64` (don't use `host`).
+- **RAM**: 2048–4096 MB depending on device.
+- **Storage**: Create a qcow2 disk (e.g. 32–64 GB) and boot from the ISO first, then install to disk. Booting live from ISO on slow storage can be sluggish.
+- **Graphics**: `virtio-gpu-pci` or `vmware-svga`/`std` VGA depending on Vectras version. If display is black, try switching graphics card.
+- **Network**: `virtio-net-pci` with user/NAT.
+- **UEFI vs BIOS**: The ISOs are hybrid (MBR + UEFI). Try BIOS/Legacy first if UEFI is problematic.
+
+Quick Vectras settings suggestion:
+- ISO: `novagos-plasma-2026.10.19-x86_64.iso`
+- Disk: qcow2, >= 32GB
+- RAM: 4096 MB (if available)
+- CPU cores: 2–4
+- Boot: CD-ROM first
+- Display: VirtIO GPU or VGA
+- Network: NAT
