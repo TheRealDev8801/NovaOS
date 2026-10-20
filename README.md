@@ -1,6 +1,6 @@
 # NovaOS
 
-**The all-in-one Operating System Linux. Arch-powered operating system for gamers and servers.**
+**The most magical all-in-one Operating System Linux. Arch-powered operating system for gamers and servers.**
 
 ## Vision
 
@@ -32,7 +32,7 @@ No assembly required.
 
 ## Links
 
-- **Website**: https://novaos.aibotv2-hosting.biz 
+- **Website**: https://novaos.aibotv2-hosting.biz
 
 ## License
 
