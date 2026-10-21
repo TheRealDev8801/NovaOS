@@ -1,0 +1,98 @@
+# NovaOS Starlight — Plymouth boot splash
+#
+# Palette from branding/nova-plasma/color-schemes/Nova.colors:
+#   bg #05070f -> #141c3a, cyan #6ee7ff, violet #a78bfa, text #e8ecf8
+#
+# Plymouth's script language has no particle system, so the starfield is a
+# fixed set of sprites, each carrying its own phase/speed/brightness as a
+# property on the sprite object (the idiom used by upstream themes, e.g.
+# logo.opacity_angle in themes/script/script.script). Nothing allocates per
+# frame and the script never calls sleep(), so it cannot stall the boot.
+#
+# Grammar notes, checked against the upstream reference theme:
+#   * arrays are usable and auto-size:   things[i] = Sprite(...)
+#   * Math.Sin / Math.Cos exist
+#   * functions are declared          fun name () { ... }
+#   * callbacks are registered with   Plymouth.SetRefreshFunction(name)
+
+Window.SetBackgroundTopColor(0.020, 0.027, 0.059);
+Window.SetBackgroundBottomColor(0.078, 0.110, 0.227);
+
+# ── assets ────────────────────────────────────────────────────────────────
+star_image = Image("assets/star.png");
+logo_image = Image("assets/logo.png");
+
+star_w = star_image.GetWidth();
+star_h = star_image.GetHeight();
+logo_w = logo_image.GetWidth();
+logo_h = logo_image.GetHeight();
+
+# ── starfield ─────────────────────────────────────────────────────────────
+# Deterministic layout: the same field every boot, so the splash is
+# recognisable instead of reshuffling. Coordinates are fractions of the
+# screen, which keeps it resolution independent.
+star_count = 48;
+
+for (i = 0; i < star_count; i++)
+    {
+    # Two cheap integer hashes give x and y without needing a random().
+    hx = (i * 2654435761) % 1000;
+    hy = (i * 40503 + 12345) % 1000;
+
+    star[i].sprite = Sprite(star_image);
+    star[i].sprite.SetX((hx / 1000.0) * Window.GetWidth()  - star_w / 2);
+    star[i].sprite.SetY((hy / 1000.0) * Window.GetHeight() - star_h / 2);
+    star[i].sprite.SetOpacity(0.4);
+
+    # per-star animation constants, spread so neighbours are out of step
+    star[i].phase = (i % 24) / 24.0;
+    star[i].speed = 0.35 + (i % 7) * 0.05;
+    star[i].base  = 0.25 + (hy % 50) / 100.0;
+    }
+
+# ── nova glow ─────────────────────────────────────────────────────────────
+# The star sprite is a soft radial blob, so scaling it up reads as a glow.
+glow = Sprite(star_image);
+glow.SetX(Window.GetWidth()  / 2 - star_w * 4);
+glow.SetY(Window.GetHeight() / 2 - star_h * 4);
+glow.SetOpacity(0.45);
+glow_angle = 0.0;
+
+# ── wordmark ──────────────────────────────────────────────────────────────
+logo = Sprite(logo_image);
+logo.SetX(Window.GetWidth()  / 2 - logo_w / 2);
+logo.SetY(Window.GetHeight() / 2 - logo_h / 2);
+logo.SetOpacity(0);
+
+# ── animation ─────────────────────────────────────────────────────────────
+# `elapsed` is a frame counter driving the animation, not wall-clock time.
+elapsed = 0.0;
+
+fun refresh_callback ()
+    {
+    elapsed += 0.016;
+
+    # stars: out-of-phase sine twinkle
+    for (i = 0; i < star_count; i++)
+        {
+        tw = Math.Sin((elapsed * star[i].speed + star[i].phase) * 6.2831853);
+        op = star[i].base + 0.35 * tw;
+        if (op < 0.05)
+            op = 0.05;
+        if (op > 1.0)
+            op = 1.0;
+        star[i].sprite.SetOpacity(op);
+        }
+
+    # glow: slow breathing, roughly a 4 second period
+    glow_angle += 0.024;
+    glow.SetOpacity(0.40 + 0.18 * Math.Sin(glow_angle));
+
+    # wordmark: fade up over the first ~2.5s, then hold
+    if (elapsed < 2.5)
+        logo.SetOpacity(elapsed / 2.5);
+    else
+        logo.SetOpacity(1.0);
+    }
+
+Plymouth.SetRefreshFunction(refresh_callback);

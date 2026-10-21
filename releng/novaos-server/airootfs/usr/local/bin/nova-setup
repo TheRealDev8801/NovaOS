@@ -1,0 +1,390 @@
+#!/usr/bin/env bash
+# NovaOS Setup — the NovaOS first-boot experience.
+#
+# Offers two paths:
+#   * Try NovaOS   — nothing is written; just explore the live session.
+#   * Install      — a short wizard that writes an archinstall config and runs
+#                    it, so a real disk layout and user account are created.
+#
+# Deliberately a shell script around `archinstall` rather than Calamares:
+# Calamares is AUR-only, so shipping it would mean compiling a large Qt/KDE
+# tree inside every ISO build. archinstall is an official Arch package.
+#
+# Usage:  nova-setup          (from the live session)
+#         nova-setup --check  (validate the generated config without installing)
+set -euo pipefail
+
+VERSION="0.1.0"
+CONF_DIR="/tmp/novaos-setup"
+USER_CONF="$CONF_DIR/user_configuration.json"
+CREDS_CONF="$CONF_DIR/user_credentials.json"
+
+# ── presentation ──────────────────────────────────────────────────────────
+# Nova palette (branding/nova-plasma/color-schemes/Nova.colors), as ANSI.
+C_CYAN=$'\033[38;2;110;231;255m'
+C_VIOLET=$'\033[38;2;167;139;250m'
+C_TEXT=$'\033[38;2;232;236;248m'
+C_DIM=$'\033[38;2;154;165;196m'
+C_BOLD=$'\033[1m'
+C_OFF=$'\033[0m'
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+banner() {
+  printf '\n%s%s' "$C_CYAN" "$C_BOLD"
+  cat <<'EOF'
+   _   _                 ___  ____
+  | \ | | _____   ____ _/ _ \/ ___|
+  |  \| |/ _ \ \ / / _` | | | \___ \
+  | |\  | (_) \ V / (_| | |_| |___) |
+  |_| \_|\___/ \_/ \__,_|\___/|____/
+EOF
+  printf '%s%s  Setup %s%s\n\n' "$C_VIOLET" "$C_OFF" "$VERSION" "$C_OFF"
+}
+
+say()  { printf '%s%s%s\n' "$C_TEXT" "$*" "$C_OFF"; }
+dim()  { printf '%s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
+warn() { printf '%s%s%s\n' "$C_VIOLET" "$*" "$C_OFF" >&2; }
+die()  { printf '%s%s%s\n' "$C_VIOLET" "$*" "$C_OFF" >&2; exit 1; }
+
+# Ask a question: gum if available, otherwise a plain read. Keeps the wizard
+# usable even if gum failed to install.
+ask() {
+  local prompt="$1" default="${2:-}"
+  if have gum; then
+    gum input --prompt "$prompt " --value "$default" --prompt.foreground 110
+  else
+    local reply
+    read -r -p "$prompt [${default}] " reply || true
+    printf '%s' "${reply:-$default}"
+  fi
+}
+
+confirm() {
+  local prompt="$1"
+  if have gum; then
+    gum confirm "$prompt"
+  else
+    local reply
+    read -r -p "$prompt [y/N] " reply || true
+    [[ "$reply" =~ ^[Yy] ]]
+  fi
+}
+
+choose() {
+  local prompt="$1"; shift
+  if have gum; then
+    gum choose --header "$prompt" "$@"
+  else
+    say "$prompt"
+    local i=1
+    for o in "$@"; do printf '  %d) %s\n' "$i" "$o"; i=$((i+1)); done
+    local n
+    read -r -p "Choose [1]: " n || true
+    n="${n:-1}"
+    local arr=("$@")
+    printf '%s' "${arr[$((n-1))]}"
+  fi
+}
+
+# ── disk discovery ────────────────────────────────────────────────────────
+# Only real, whole block devices: skip loop devices (the ISO itself is one),
+# read-only media (the CD-ROM), and anything already mounted (the live root).
+list_disks() {
+  lsblk -dno NAME,TYPE,SIZE,MODEL 2>/dev/null | awk '$2=="disk" { $1=$1; print }' | while read -r name type size rest; do
+    [[ "$name" == loop* ]] && continue
+    [[ "$name" == sr* ]] && continue
+    local dev="/dev/$name"
+    # skip if any partition of it is mounted (protects the live medium)
+    if lsblk -no MOUNTPOINT "$dev" 2>/dev/null | grep -qv '^$'; then
+      continue
+    fi
+    if findmnt -rn -S "$dev" >/dev/null 2>&1; then
+      continue
+    fi
+    printf '/dev/%s\t%s\t%s\n' "$name" "$size" "$rest"
+  done
+}
+
+# ── config generation ─────────────────────────────────────────────────────
+# Writes archinstall's two JSON files. Kept as a heredoc with shell
+# interpolation so the values the user typed are the only variables.
+write_config() {
+  local disk="$1" hostname="$2" username="$3" password="$4" timezone="$5" locale="$6"
+  local fs="$7" edition="$8"
+
+  mkdir -p "$CONF_DIR"
+  chmod 700 "$CONF_DIR"
+
+  cat > "$USER_CONF" <<EOF
+{
+  "archinstall-language": "English",
+  "audio": "pipewire",
+  "bootloader": "systemd-bootctl",
+  "profile": { "main": "Minimal" },
+  "kernels": ["linux"],
+  "network_config": { "type": "nm" },
+  "packages": [],
+  "parallel downloads": 5,
+  "disk_config": {
+    "config_type": "default_layout",
+    "device_modifications": [
+      {
+        "device": "$disk",
+        "wipe": true,
+        "partitions": [
+          {
+            "fs_type": "fat32",
+            "mountpoint": "/boot",
+            "mount_options": ["fmask=0137", "dmask=0027"],
+            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 512 },
+            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
+            "type": "primary",
+            "obj_id": "nova-boot"
+          },
+          {
+            "btrfs": [
+              { "name": "@", "mountpoint": "/" },
+              { "name": "@home", "mountpoint": "/home" },
+              { "name": "@snapshots", "mountpoint": "/.snapshots" },
+              { "name": "@log", "mountpoint": "/var/log" },
+              { "name": "@pkg", "mountpoint": "/var/cache/pacman/pkg" }
+            ],
+            "fs_type": "$fs",
+            "mountpoint": null,
+            "mount_options": ["compress=zstd", "noatime"],
+            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 0 },
+            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 513 },
+            "type": "primary",
+            "obj_id": "nova-root"
+          }
+        ]
+      }
+    ]
+  },
+  "swap": true,
+  "timezone": "$timezone",
+  "locale_config": { "kb_layout": "us", "sys_lang": "$locale" },
+  "mirror_config": { "custom_servers": [] },
+  "ntp": true
+}
+EOF
+
+  # Credentials are separate in archinstall, and are hashed at install time.
+  cat > "$CREDS_CONF" <<EOF
+{
+  "root_enc_password": "",
+  "users": [
+    {
+      "username": "$username",
+      "password": "$password",
+      "groups": ["wheel", "video", "render", "audio", "input", "storage", "games", "power"]
+    }
+  ]
+}
+EOF
+
+  chmod 600 "$CREDS_CONF"
+}
+
+# Post-install steps: the things archinstall has no opinion about but NovaOS
+# does. Runs after archinstall succeeds.
+post_install() {
+  local username="$1" root_mnt="$2" edition="$3"
+  say "Applying NovaOS defaults to the new system…"
+
+  local target="/mnt"
+  [[ -d "$root_mnt" ]] && target="$root_mnt"
+
+  # Sudo access for the wheel group — otherwise the new user cannot escalate.
+  mkdir -p "$target/etc/sudoers.d"
+  printf '%%wheel ALL=(ALL:ALL) ALL\n' > "$target/etc/sudoers.d/10-wheel"
+  chmod 440 "$target/etc/sudoers.d/10-wheel"
+
+  # Bring the same Nova branding the live session uses onto the installed
+  # system, so the look survives the install.
+  if [[ -d "$target/etc" ]]; then
+    for f in plymouth/plymouthd.conf; do
+      [[ -f "/etc/$f" ]] && mkdir -p "$target/etc/$(dirname "$f")" && cp "/etc/$f" "$target/etc/$f"
+    done
+    if [[ -d /usr/share/plymouth/themes/nova-starlight ]]; then
+      mkdir -p "$target/usr/share/plymouth/themes"
+      cp -r /usr/share/plymouth/themes/nova-starlight "$target/usr/share/plymouth/themes/"
+    fi
+    # Enable the splash on the installed system's kernel command line.
+    if [[ -f "$target/etc/default/grub" ]] && ! grep -q 'splash' "$target/etc/default/grub"; then
+      sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 splash quiet loglevel=3"/' \
+        "$target/etc/default/grub" || true
+    fi
+  fi
+
+  # Make sure the desktop session is available to the new user.
+  if [[ "$edition" != "server" ]]; then
+    mkdir -p "$target/etc/sddm.conf.d"
+    cat > "$target/etc/sddm.conf.d/nova.conf" <<EOF
+[Autologin]
+User=$username
+Session=plasma
+Relogin=false
+EOF
+  fi
+
+  say "NovaOS defaults applied."
+}
+
+# ── flows ─────────────────────────────────────────────────────────────────
+try_novaos() {
+  banner
+  say "Welcome to NovaOS."
+  echo
+  dim "You are running the live session — nothing has been written to any disk."
+  echo
+  say "Things to try:"
+  dim "  • The Nova Desktop is already running."
+  dim "  • Open a terminal with Konsole from the taskbar."
+  dim "  • Install to disk whenever you are ready:  nova-setup"
+  echo
+  if have fastfetch; then fastfetch; else uname -a; fi
+  echo
+  dim "Press Enter to close."
+  read -r _ || true
+}
+
+install_flow() {
+  banner
+  say "NovaOS Install"
+  echo
+  dim "This will erase the disk you choose. Everything on it will be lost."
+  echo
+
+  # 1. disk
+  local disks
+  disks="$(list_disks)"
+  if [[ -z "$disks" ]]; then
+    die "No installable disk found. Attach a disk (or a QEMU -drive) and retry."
+  fi
+
+  local options=()
+  while IFS=$'\t' read -r dev size model; do
+    options+=("$dev  ($size)  $model")
+  done <<< "$disks"
+
+  local chosen
+  chosen="$(choose "Select the disk to install NovaOS on:" "${options[@]}")" || die "Cancelled."
+  local disk="${chosen%% *}"
+
+  [[ -b "$disk" ]] || die "Not a block device: $disk"
+
+  echo
+  warn "ALL DATA ON $disk WILL BE DESTROYED."
+  if ! confirm "Erase $disk and install NovaOS?"; then
+    die "Cancelled. Nothing was written."
+  fi
+
+  # 2. basics
+  echo
+  local hostname username password timezone locale fs edition
+  hostname="$(ask "Hostname:" "novaos")"
+  username="$(ask "Username:" "nova")"
+  while :; do
+    password="$(ask "Password for $username:" "")"
+    [[ -n "$password" ]] && break
+    warn "Password cannot be empty."
+  done
+
+  # timezone: offer the live session's own, which the user already chose there
+  local live_tz
+  live_tz="$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)"
+  timezone="$(ask "Timezone:" "$live_tz")"
+  locale="$(ask "System language:" "en_US.UTF-8")"
+
+  echo
+  fs="$(choose "Filesystem for the root partition:" "btrfs (recommended, snapshots)" "ext4 (simple, familiar)" || echo "btrfs")"
+  fs="${fs%% *}"
+
+  echo
+  dim "  Disk       : $disk  (will be erased)"
+  dim "  Hostname   : $hostname"
+  dim "  User       : $username"
+  dim "  Timezone   : $timezone"
+  dim "  Locale     : $locale"
+  dim "  Filesystem : $fs"
+  echo
+  if ! confirm "Begin installation?"; then
+    die "Cancelled. Nothing was written."
+  fi
+
+  # 3. configure + install
+  write_config "$disk" "$hostname" "$username" "$password" "$timezone" "$locale" "$fs" "$edition"
+  say "Wrote configuration to $CONF_DIR"
+
+  if ! have archinstall; then
+    die "archinstall is not installed in this live session. Cannot continue."
+  fi
+
+  say "Running archinstall. This takes a while — progress is shown below."
+  echo
+  if ! archinstall --config "$USER_CONF" --creds "$CREDS_CONF"; then
+    die "archinstall failed. No changes were made to your bootloader; you can retry."
+  fi
+
+  # 4. post-install
+  post_install "$username" "/mnt" "$edition"
+
+  echo
+  say "Installation complete."
+  dim "Remove the installation medium and reboot into NovaOS."
+  if confirm "Reboot now?"; then
+    systemctl reboot
+  fi
+}
+
+# ── entrypoint ────────────────────────────────────────────────────────────
+case "${1:-}" in
+  --check)
+    # Validate that the wizard can at least generate a config, without
+    # touching any disk. Used by CI and by hand when editing this script.
+    tmp="$(mktemp -d)"
+    CONF_DIR="$tmp" USER_CONF="$tmp/u.json" CREDS_CONF="$tmp/c.json"
+    write_config "/dev/null" "novaos" "nova" "example" "UTC" "en_US.UTF-8" "btrfs" "desktop"
+    for f in "$USER_CONF" "$CREDS_CONF"; do
+      python3 -c "import json,sys; json.load(open(sys.argv[1])); print('valid JSON:', sys.argv[1])" "$f" \
+        || die "generated invalid JSON: $f"
+    done
+    rm -rf "$tmp"
+    say "nova-setup --check: OK"
+    ;;
+  --try)
+    try_novaos
+    ;;
+  --install)
+    install_flow
+    ;;
+  "" )
+    banner
+    say "What would you like to do?"
+    echo
+    choice="$(choose "Choose an option:" \
+      "Try NovaOS (live session — nothing is written)" \
+      "Install NovaOS to disk" \
+      "Quit")" || choice="Quit"
+    case "$choice" in
+      Try*)     try_novaos ;;
+      Install*) install_flow ;;
+      *)        dim "Nothing to do." ;;
+    esac
+    ;;
+  -h|--help)
+    cat <<EOF
+nova-setup — NovaOS setup
+
+  nova-setup            interactive: try the live session or install
+  nova-setup --try      describe the live session
+  nova-setup --install  go straight to the installer
+  nova-setup --check    validate config generation, touch no disks
+EOF
+    ;;
+  *)
+    die "unknown option: $1 (try --help)"
+    ;;
+esac

@@ -41,3 +41,11 @@ podman
 buildah
 skopeo
 qemu-guest-agent
+
+# Boot splash
+plymouth
+
+# NovaOS setup wizard
+archinstall
+gum
+dialog

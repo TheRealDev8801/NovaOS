@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NovaOS first login
+Comment=Offer the NovaOS setup wizard once, on a live session
+Exec=/usr/local/bin/nova-first-login
+OnlyShowIn=KDE;
+X-GNOME-Autostart-enabled=false
+NoDisplay=true

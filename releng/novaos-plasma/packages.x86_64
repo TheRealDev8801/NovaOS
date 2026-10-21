@@ -103,3 +103,11 @@ qemu-guest-agent
 spice-vdagent
 xf86-video-qxl
 xdg-user-dirs
+
+# Boot splash
+plymouth
+
+# NovaOS setup wizard
+archinstall
+gum
+dialog

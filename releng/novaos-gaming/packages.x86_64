@@ -35,6 +35,54 @@ openssh
 rsync
 zsh
 
+# Nova Desktop (Plasma Nova) — the Gaming edition ships the same desktop as
+# the Plasma edition so both feel like one OS. plasma-desktop rather than
+# plasma-meta: keeps discover/flatpak/krdp/kup/plasma-vault/print-manager/
+# knighttime out of the image. See releng/novaos-plasma/packages.x86_64.
+plasma-desktop
+kscreen
+kwallet
+kwallet-pam
+kwalletmanager
+kde-cli-tools
+kglobalacceld
+
+# Hand-picked desktop goodies
+plasma-nm
+plasma-pa
+kdeplasma-addons
+kinfocenter
+ksystemstats
+plasma-systemmonitor
+ksshaskpass
+kde-gtk-config
+breeze-gtk
+konsole
+dolphin
+kate
+ark
+spectacle
+gwenview
+okular
+kcalc
+ffmpegthumbs
+kdegraphics-thumbnailers
+kdialog
+
+# Display manager
+sddm
+
+# Audio
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+
+# Fonts
+noto-fonts
+noto-fonts-emoji
+ttf-liberation
+
 # Gaming stack
 mesa
 vulkan-radeon
@@ -51,3 +99,17 @@ gamescope
 steam
 wine
 winetricks
+
+# QEMU / VM guest support (Plasma Nova must work in VMs)
+qemu-guest-agent
+spice-vdagent
+xf86-video-qxl
+xdg-user-dirs
+
+# Boot splash
+plymouth
+
+# NovaOS setup wizard
+archinstall
+gum
+dialog

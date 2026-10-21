@@ -26,3 +26,9 @@ file_permissions=(
 # airootfs tree and archiso rejects permission entries for missing paths.
 # The live user's home is created at boot by
 # airootfs/usr/lib/tmpfiles.d/nova-home.conf (0700 nova:nova).
+
+# Boot splash. splash = show plymouth; quiet = suppress kernel noise;
+# vt.global_cursor_default=0 hides the blinking text cursor;
+# loglevel=3 keeps the console calm. Applies to both syslinux and
+# systemd-boot, which append %KERNEL_PARAMS%.
+kernel_params="splash quiet loglevel=3 vt.global_cursor_default=0"

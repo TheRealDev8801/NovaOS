@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install NovaOS
+Name[en_GB]=Install NovaOS
+Comment=Install NovaOS to disk, or tour the live session
+Exec=konsole -e /usr/local/bin/nova-setup
+Icon=system-software-install
+Terminal=false
+Categories=System;Settings;
+Keywords=install;setup;novaos;

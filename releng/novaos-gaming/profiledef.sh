@@ -19,3 +19,9 @@ file_permissions=(
   ["/etc/shadow"]="0:0:400"
   ["/root"]="0:0:750"
 )
+
+# Boot splash. splash = show plymouth; quiet = suppress kernel noise;
+# vt.global_cursor_default=0 hides the blinking text cursor;
+# loglevel=3 keeps the console calm. Applies to both syslinux and
+# systemd-boot, which append %KERNEL_PARAMS%.
+kernel_params="splash quiet loglevel=3 vt.global_cursor_default=0"

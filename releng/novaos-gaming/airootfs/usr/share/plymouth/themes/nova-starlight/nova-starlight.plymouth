@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=NovaOS Starlight
+Description=NovaOS boot splash — starlight field with the NovaOS wordmark
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/nova-starlight
+ScriptFile=/usr/share/plymouth/themes/nova-starlight/nova-starlight.script

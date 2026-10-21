@@ -1,2 +1,8 @@
-NovaOS Server — https://novaos.aibotv2-hosting.biz
-Live session: root (autologin). Set a password before installing: passwd
+
+  NovaOS Server  —  https://novaos.aibotv2-hosting.biz
+
+  This is a live session. Nothing has been written to your disks yet.
+  Run  nova-setup  to install NovaOS, or just look around.
+
+  Console logins use root with no password. Set one before installing:  passwd
+
