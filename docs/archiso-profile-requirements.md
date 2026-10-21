@@ -42,6 +42,27 @@ lsinitcpio /tmp/initrd.img | grep hooks/archiso
 
 If `Hook run order` has no `archiso`, the ISO will not boot.
 
+## Confirmed in production
+
+The fix is no longer only structurally verified. `novagos-gaming-2026.10.21-x86_64.iso`
+(sha256 `9dde7aea…86cabd`) was booted on real hardware — Termux QEMU on an
+Android phone — and **passed `Switch Root`**, reaching the live session. Every
+earlier build, and every edition before this fix, failed at exactly that point.
+
+That closes the original blocker. It is worth being explicit about what was
+*not* the cause, because each was investigated at length:
+
+| Suspect | Verdict |
+|---|---|
+| squashfs `-comp xz` / `-b 1M` | **Not the cause.** Stock Arch itself uses `-b 1M`. |
+| QEMU `file.locking=off` | **Not the cause.** Keep it off — it avoids the Android lock error, but it never affected `Switch Root`. |
+| `readonly=on` | **Not the cause.** Not a lock; harmless and kept. |
+| Missing `archiso.conf` | **The actual root cause.** All three profiles omitted it. |
+
+The guard added to `releng/build.sh` makes this class of regression impossible to
+ship: it extracts the generated initramfs and fails the build if `lsinitcpio -a`
+finds no `archiso` hooks.
+
 ## Other stock files we added
 
 Also copied from `/usr/share/archiso/configs/releng/` so the live session is

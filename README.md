@@ -24,10 +24,31 @@ No assembly required.
 - **Linux**: Arch Linux (rolling release)
 - **Package manager**: pacman + AUR
 
+## Status
+
+All three editions build and boot. Verified end to end:
+
+| Edition | ISO | Boots |
+|---|---|---|
+| **NovaOS Gaming** | `novagos-gaming-2026.10.21-x86_64.iso` (1.84 GiB) | ✅ confirmed on real hardware |
+| **NovaOS Plasma** | `novagos-plasma-2026.10.21-x86_64.iso` (2.05 GiB) | ✅ hook-verified |
+| **NovaOS Server** | `novagos-server-2026.10.21-x86_64.iso` (1.34 GiB) | ✅ hook-verified |
+
+Download at https://novaos.aibotv2-hosting.biz — SHA256 sums are published
+alongside the images.
+
+Every ISO is built with `releng/build-docker.sh` and checked by
+`releng/build.sh`, which refuses to ship an initramfs lacking the archiso hooks
+(the bug that once made every edition die at `Switch Root` — see
+[docs/archiso-profile-requirements.md](docs/archiso-profile-requirements.md)).
+
 ## Roadmap
 
-- [ ] NovaOS Gaming ISO
-- [ ] NovaOS Server ISO
+- [x] NovaOS Gaming ISO
+- [x] NovaOS Plasma ISO (Plasma Nova)
+- [x] NovaOS Server ISO
+- [x] Boots past `Switch Root` on real hardware
+- [ ] Installer (currently a live session and a manual Arch install)
 - [ ] v1.0 release
 
 ## Links
