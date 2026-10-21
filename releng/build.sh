@@ -42,17 +42,26 @@ check_wizard_synced() {
 }
 
 build() {
-  local profile="$1" stamp iso
+  local profile="$1" stamp iso rc=0
   echo "==> Building NovaOS ISO: ${profile}"
   stamp="$(mktemp)"
-  mkarchiso -v -w "/tmp/novaos-archiso-${profile}" -o "$(pwd)/../out" "${profile}"
+  # mkarchiso exits non-zero when a pacman hook fails inside the chroot, which
+  # always happens: "Updating journal message catalog" and "Updating the
+  # appstream cache" both call tools that need a running system. The ISO is
+  # written BEFORE that point and is fine, so a non-zero exit here is not fatal.
+  # Do not let it abort the script: the checks below are what decide whether the
+  # build is good, and they must run even when mkarchiso complains.
+  mkarchiso -v -w "/tmp/novaos-archiso-${profile}" -o "$(pwd)/../out" "${profile}" || rc=$?
   # Verify a fresh ISO was actually produced. Guards against a build that
   # "succeeds" but emits nothing (e.g. archiso aborting mid-way).
   iso="$(find "$(pwd)/../out" -maxdepth 1 -name '*.iso' -newer "$stamp" -print -quit)"
   rm -f "$stamp"
   if [[ -z "$iso" ]]; then
-    echo "ERROR: ${profile}: build finished but produced no ISO" >&2
+    echo "ERROR: ${profile}: mkarchiso exited ${rc} and produced no ISO" >&2
     return 1
+  fi
+  if (( rc != 0 )); then
+    echo "==> ${profile}: mkarchiso exited ${rc} (chroot pacman hooks); ISO was written, continuing"
   fi
   # Verify the initramfs actually contains the archiso hooks. Without
   # airootfs/etc/mkinitcpio.conf.d/archiso.conf the ISO builds fine but cannot
