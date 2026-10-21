@@ -27,11 +27,15 @@ sync_wizard "../nova-setup/nova-first-login"
 # Refuse to build if a shipped copy still differs from the source. Cheap, and it
 # turns "silently shipped the wrong script" into a loud failure.
 check_wizard_synced() {
-  local src="$1" dst
+  local src="$1" dst file
   for dst in novaos-*/airootfs/usr/local/bin; do
-    [[ -f "${dst}/$(basename "$src")" ]] || continue
-    if ! cmp -s "$src" "${dst}/$(basename "$src")"; then
-      echo "ERROR: ${dst}/$(basename "$src") differs from ${src}" >&2
+    file="${dst}/$(basename "$src")"
+    [[ -f "$file" ]] || continue
+    # sha256sum, not cmp: cmp is not present in the archlinux:latest image the
+    # Docker build uses. A missing command made `if ! cmp -s` succeed, so every
+    # build failed claiming the files differed when they were identical.
+    if [[ "$(sha256sum < "$src" | cut -d' ' -f1)" != "$(sha256sum < "$file" | cut -d' ' -f1)" ]]; then
+      echo "ERROR: ${file} differs from ${src}" >&2
       return 1
     fi
   done
@@ -97,7 +101,8 @@ build() {
           # fixed exec bit and an outdated script body, which is worse than
           # either failure alone because it looks like it worked.
           local want="../nova-setup/$(basename "$f")"
-          if [[ -f "$want" ]] && ! cmp -s "$want" "${tmpd2}/x/${f}"; then
+          if [[ -f "$want" ]] && \
+             [[ "$(sha256sum < "$want" | cut -d' ' -f1)" != "$(sha256sum < "${tmpd2}/x/${f}" | cut -d' ' -f1)" ]]; then
             echo "ERROR: ${profile}: ${f} inside the ISO differs from ${want}" >&2
             echo "       A stale copy in airootfs was built. Run the sync step." >&2
             bad=1
