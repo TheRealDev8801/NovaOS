@@ -120,7 +120,9 @@ IP if the client is a separate app. Notes:
 
 Vectras on Android typically runs QEMU with TCG (no KVM). Key notes:
 
-- **Use the right ISO**: `novagos-plasma-*.iso` for a full KDE Plasma desktop (autologin as user `nova`). The `novagos-gaming-*.iso` is a console/live installer environment with no desktop — if you only see a TTY/login prompt, that's expected.
+- **Use the right ISO**: `novagos-plasma-*.iso` or `novagos-gaming-*.iso` both
+  ship the KDE Plasma desktop (autologin as user `nova`). `novagos-server-*.iso`
+  is console-only — if you only see a TTY/login prompt on Server, that's expected.
 - **Machine type**: `q35` or `pc-i440fx-7.2` usually work. Avoid exotic machine types.
 - **CPU**: `max` or `qemu64` (don't use `host`).
 - **RAM**: 2048–4096 MB depending on device.
@@ -129,11 +131,32 @@ Vectras on Android typically runs QEMU with TCG (no KVM). Key notes:
 - **Network**: `virtio-net-pci` with user/NAT.
 - **UEFI vs BIOS**: The ISOs are hybrid (MBR + UEFI). Try BIOS/Legacy first if UEFI is problematic.
 
+### Plasma needs a DRM device (important on Android)
+
+Arch's Plasma 6 is **Wayland-only**: the ISO installs
+`/usr/share/wayland-sessions/plasma.desktop` and `startplasma-wayland`, with no
+X11 session. Wayland needs a real DRM/KMS device, so the choice of `-vga`
+matters far more than it would for X11:
+
+| `-vga` | Result |
+|---|---|
+| `virtio-gpu-pci` / `-device virtio-vga` | **recommended** — proper DRM, Wayland starts |
+| `qxl` | works; requires `xf86-video-qxl` (shipped) and a SPICE or VNC client |
+| `std` (bochs) | boot works and the **splash shows**, but Plasma may fail to start |
+| `none` | only useful with SPICE/VNC and an explicit GPU device |
+
+If the Starlight splash appears and then you land on a black screen or a text
+console instead of the desktop, that is the classic symptom of Wayland finding
+no usable DRM device. **Switch `-vga std` to `-device virtio-gpu-pci`** rather
+than assuming the image is broken.
+
+`-vga std` is still fine for **NovaOS Server**, which has no desktop.
+
 Quick Vectras settings suggestion:
-- ISO: `novagos-plasma-2026.10.19-x86_64.iso`
+- ISO: `novagos-plasma-2026.10.21-x86_64.iso`
 - Disk: qcow2, >= 32GB
 - RAM: 4096 MB (if available)
-- CPU cores: 2–4
+- CPU cores: 2-4
 - Boot: CD-ROM first
-- Display: VirtIO GPU or VGA
+- Display: VirtIO GPU (preferred) or VGA
 - Network: NAT
