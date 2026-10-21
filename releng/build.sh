@@ -42,22 +42,34 @@ check_wizard_synced() {
 }
 
 build() {
-  local profile="$1" stamp iso rc=0
+  local profile="$1" iso rc=0
+  local outdir="$(cd "$(pwd)/../out" && pwd)"
   echo "==> Building NovaOS ISO: ${profile}"
-  stamp="$(mktemp)"
+  # Do NOT detect the fresh ISO with `find -newer <stamp>`. mkarchiso sets
+  # SOURCE_DATE_EPOCH for reproducible builds, so the ISO's mtime can be OLDER
+  # than a stamp taken at build start — the ordering is not guaranteed and the
+  # check silently found nothing. Remove the expected output up front instead,
+  # then its mere existence afterwards proves this build produced it.
+  # Derive the ISO filename the way mkarchiso does: iso_name + iso_version.
+  # iso_version is not a literal — it contains a command substitution, e.g.
+  # "$(date +%Y.%m.%d)" — so it must be evaluated, not read verbatim, or the
+  # filename will never match what mkarchiso writes.
+  local name version
+  name="$(sed -n 's/^iso_name="\(.*\)"/\1/p' "${profile}/profiledef.sh")"
+  version="$(sed -n 's/^iso_version="\(.*\)"/\1/p' "${profile}/profiledef.sh")"
+  version="$(eval printf '%s' "\"${version}\"")"
+  iso="${outdir}/${name}-${version}-x86_64.iso"
+  rm -f "$iso"
   # mkarchiso exits non-zero when a pacman hook fails inside the chroot, which
   # always happens: "Updating journal message catalog" and "Updating the
   # appstream cache" both call tools that need a running system. The ISO is
   # written BEFORE that point and is fine, so a non-zero exit here is not fatal.
   # Do not let it abort the script: the checks below are what decide whether the
   # build is good, and they must run even when mkarchiso complains.
-  mkarchiso -v -w "/tmp/novaos-archiso-${profile}" -o "$(pwd)/../out" "${profile}" || rc=$?
-  # Verify a fresh ISO was actually produced. Guards against a build that
-  # "succeeds" but emits nothing (e.g. archiso aborting mid-way).
-  iso="$(find "$(pwd)/../out" -maxdepth 1 -name '*.iso' -newer "$stamp" -print -quit)"
-  rm -f "$stamp"
-  if [[ -z "$iso" ]]; then
+  mkarchiso -v -w "/tmp/novaos-archiso-${profile}" -o "$outdir" "${profile}" || rc=$?
+  if [[ ! -f "$iso" ]]; then
     echo "ERROR: ${profile}: mkarchiso exited ${rc} and produced no ISO" >&2
+    echo "       expected: ${iso}" >&2
     return 1
   fi
   if (( rc != 0 )); then
@@ -99,8 +111,19 @@ build() {
       for f in usr/local/bin/nova-setup usr/local/bin/nova-first-login; do
         # Only check files this profile actually ships.
         if unsquashfs -l "${tmpd2}/root.sfs" "$f" >/dev/null 2>&1; then
-          unsquashfs -d "${tmpd2}/x" "${tmpd2}/root.sfs" "$f" >/dev/null 2>&1
-          if [[ ! -x "${tmpd2}/x/${f}" ]]; then
+          # A fresh destination per file. Reusing one directory across loop
+          # iterations makes unsquashfs refuse (the target already exists) and
+          # return non-zero, which under `set -e` killed the whole build on the
+          # second file — silently, before any of the checks reported.
+          local ex="${tmpd2}/x-$(basename "$f")"
+          rm -rf "$ex"
+          unsquashfs -d "$ex" "${tmpd2}/root.sfs" "$f" >/dev/null 2>&1 || true
+          if [[ ! -e "${ex}/${f}" ]]; then
+            echo "ERROR: ${profile}: could not extract ${f} from the ISO to check it" >&2
+            bad=1
+            continue
+          fi
+          if [[ ! -x "${ex}/${f}" ]]; then
             echo "ERROR: ${profile}: ${f} is not executable inside the ISO" >&2
             echo "       Add it to file_permissions in profiledef.sh (0:0:755)" >&2
             bad=1
@@ -111,7 +134,7 @@ build() {
           # either failure alone because it looks like it worked.
           local want="../nova-setup/$(basename "$f")"
           if [[ -f "$want" ]] && \
-             [[ "$(sha256sum < "$want" | cut -d' ' -f1)" != "$(sha256sum < "${tmpd2}/x/${f}" | cut -d' ' -f1)" ]]; then
+             [[ "$(sha256sum < "$want" | cut -d' ' -f1)" != "$(sha256sum < "${ex}/${f}" | cut -d' ' -f1)" ]]; then
             echo "ERROR: ${profile}: ${f} inside the ISO differs from ${want}" >&2
             echo "       A stale copy in airootfs was built. Run the sync step." >&2
             bad=1
