@@ -26,6 +26,9 @@ build() {
     bash -c '
       set -e
       pacman -Syu --noconfirm archiso >/dev/null 2>&1
+      # The guards in build.sh shell out to these; without them the checks
+      # silently skip (they are written to no-op when a tool is missing).
+      pacman -S --noconfirm --needed squashfs-tools xorriso >/dev/null 2>&1
       sed -i "s|chroot_add_mount udev \"\$1/dev\" -t devtmpfs -o mode=0755,nosuid|chroot_add_mount /dev \"\$1/dev\" --rbind|" /usr/bin/pacstrap /usr/bin/arch-chroot
       cd /novaos/releng
       bash build.sh '"${target}"'

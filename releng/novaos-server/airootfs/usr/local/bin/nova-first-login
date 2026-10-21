@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# NovaOS first-login helper.
+#
+# Shows the setup chooser once, on the first desktop login of a live session,
+# then never again. Done with a marker file in the user's home rather than a
+# one-shot systemd unit, so it also behaves sensibly if the same home is
+# reused.
+#
+# Deliberately non-blocking: it runs after the desktop has drawn, and if the
+# user ignores or closes it nothing else is affected.
+set -euo pipefail
+
+MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/novaos/.first-login-done"
+
+# Already greeted this home? Then stay silent.
+[[ -e "$MARKER" ]] && exit 0
+
+# Only offer on a live session, never on an installed system. The live medium
+# is identifiable by the archiso marker or by the squashfs-backed root.
+is_live=0
+[[ -e /etc/initrd-release ]] && is_live=1
+if grep -q ' / ' /proc/mounts 2>/dev/null && grep -qE '^\S+ / .*\b(squashfs|overlay)\b' /proc/mounts 2>/dev/null; then
+  is_live=1
+fi
+[[ "$is_live" == "1" ]] || exit 0
+
+mkdir -p "$(dirname "$MARKER")"
+: > "$MARKER"
+
+# Wait briefly for the session bus / terminal emulator to be ready.
+for _ in $(seq 1 20); do
+  command -v konsole >/dev/null 2>&1 && break
+  sleep 0.5
+done
+
+if command -v konsole >/dev/null 2>&1; then
+  exec konsole -e /usr/local/bin/nova-setup
+fi
+
+# No terminal emulator: fall back to a notification so the user still learns
+# the wizard exists.
+if command -v notify-send >/dev/null 2>&1; then
+  notify-send "NovaOS" "Run 'nova-setup' in a terminal to install NovaOS."
+fi

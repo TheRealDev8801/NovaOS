@@ -116,16 +116,73 @@ write_config() {
   mkdir -p "$CONF_DIR"
   chmod 700 "$CONF_DIR"
 
+  # The layout below is written against archinstall 4.5 and was checked against
+  # the schema the package itself ships at
+  #   /usr/lib/python3.14/site-packages/archinstall/examples/config-sample.json
+  # plus the ArchConfig dataclass in lib/args.py. Field names are NOT the
+  # obvious ones — a hand-written config that looks plausible is rejected
+  # outright. Notes on the traps, since they cost real debugging time:
+  #
+  #   * bootloader is a *nested object* (bootloader_config), and the value is
+  #     "Systemd-boot", not "systemd-bootctl"
+  #   * audio and profile live under app_config / profile_config, not top level
+  #   * locale_config needs BOTH sys_lang (bare "en_US") and sys_enc ("UTF-8")
+  #   * partitions need dev_path, flags and status: "create" — omitting them
+  #     fails validation rather than defaulting
+  #   * swap is an object ({enabled, algorithm}), not a boolean
+  #   * there is no top-level "parallel downloads"; it is
+  #     pacman_config.parallel_downloads
+  #
+  # Note the absent "plymouth" key. archinstall accepts it, but only as one of
+  # ITS OWN theme names (bgrt, fade-in, glow, script, solar, spinner,
+  # spinfinity, tribar, text, details) — it rejects anything else and exits.
+  # nova-starlight is not in that list, so the splash is installed and enabled
+  # by post_install() instead, which is where custom branding belongs anyway.
+  #
+  # After editing, run:  nova-setup --check   (valid JSON)
+  # and validate against the schema itself with:
+  #   archinstall --config <file> --dry-run
+  local locale_lang="${locale%%.*}"   # en_US.UTF-8 -> en_US
+  local locale_enc="UTF-8"
+  [[ "$locale" == *.* ]] && locale_enc="${locale#*.}"
+
+  mkdir -p "$CONF_DIR"
+  chmod 700 "$CONF_DIR"
+
   cat > "$USER_CONF" <<EOF
 {
+  "version": "2.8.6",
   "archinstall-language": "English",
-  "audio": "pipewire",
-  "bootloader": "systemd-bootctl",
-  "profile": { "main": "Minimal" },
+  "script": "guided",
+  "hostname": "$hostname",
   "kernels": ["linux"],
-  "network_config": { "type": "nm" },
+  "timezone": "$timezone",
+  "ntp": true,
+  "offline": false,
+  "debug": false,
+  "silent": false,
+  "no_pkg_lookups": false,
   "packages": [],
-  "parallel downloads": 5,
+  "swap": { "enabled": true, "algorithm": "zstd" },
+  "pacman_config": { "color": false, "parallel_downloads": 5 },
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_lang": "$locale_lang",
+    "sys_enc": "$locale_enc"
+  },
+  "bootloader_config": {
+    "bootloader": "Systemd-boot",
+    "uki": false,
+    "removable": false
+  },
+  "app_config": {
+    "audio_config": { "audio": "pipewire" }
+  },
+  "profile_config": {
+    "profile": { "main": "Minimal" }
+  },
+  "network_config": { "type": "nm" },
+  "mirror_config": { "custom_servers": [] },
   "disk_config": {
     "config_type": "default_layout",
     "device_modifications": [
@@ -134,51 +191,49 @@ write_config() {
         "wipe": true,
         "partitions": [
           {
+            "btrfs": [],
+            "dev_path": null,
+            "flags": ["boot"],
             "fs_type": "fat32",
+            "mount_options": [],
             "mountpoint": "/boot",
-            "mount_options": ["fmask=0137", "dmask=0027"],
+            "obj_id": "nova-boot-0001",
             "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 512 },
             "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
-            "type": "primary",
-            "obj_id": "nova-boot"
+            "status": "create",
+            "type": "primary"
           },
           {
-            "btrfs": [
-              { "name": "@", "mountpoint": "/" },
-              { "name": "@home", "mountpoint": "/home" },
-              { "name": "@snapshots", "mountpoint": "/.snapshots" },
-              { "name": "@log", "mountpoint": "/var/log" },
-              { "name": "@pkg", "mountpoint": "/var/cache/pacman/pkg" }
-            ],
+            "btrfs": [],
+            "dev_path": null,
+            "flags": [],
             "fs_type": "$fs",
-            "mountpoint": null,
-            "mount_options": ["compress=zstd", "noatime"],
+            "mount_options": [],
+            "mountpoint": "/",
+            "obj_id": "nova-root-0002",
             "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 0 },
             "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 513 },
-            "type": "primary",
-            "obj_id": "nova-root"
+            "status": "create",
+            "type": "primary"
           }
         ]
       }
     ]
-  },
-  "swap": true,
-  "timezone": "$timezone",
-  "locale_config": { "kb_layout": "us", "sys_lang": "$locale" },
-  "mirror_config": { "custom_servers": [] },
-  "ntp": true
+  }
 }
 EOF
 
-  # Credentials are separate in archinstall, and are hashed at install time.
+  # Credentials live in a separate file. archinstall hashes the password itself
+  # (enc_password), and `sudo: true` is what grants wheel membership — passing
+  # a "groups" list, as an earlier version of this script did, is not the schema.
   cat > "$CREDS_CONF" <<EOF
 {
   "root_enc_password": "",
   "users": [
     {
       "username": "$username",
-      "password": "$password",
-      "groups": ["wheel", "video", "render", "audio", "input", "storage", "games", "power"]
+      "enc_password": "$password",
+      "sudo": true
     }
   ]
 }
@@ -342,15 +397,42 @@ install_flow() {
 # ── entrypoint ────────────────────────────────────────────────────────────
 case "${1:-}" in
   --check)
-    # Validate that the wizard can at least generate a config, without
-    # touching any disk. Used by CI and by hand when editing this script.
+    # Validate that the wizard can generate a config that archinstall will
+    # actually accept, without touching any disk.
+    #
+    # Checking the JSON parses is NOT enough. A config can be perfectly valid
+    # JSON and still be rejected by archinstall — wrong field name, wrong
+    # nesting, wrong type. That is exactly how a "plymouth": true got as far as
+    # a built ISO: archinstall wants a theme *name* there, and hard-exits on
+    # anything else. So when archinstall is available we hand it the config and
+    # let it do the parsing, which is the only authority that matters.
+    #
+    # Note CONF_DIR must be exported, not assigned: the globals above are set
+    # before this case runs, so a plain assignment here would be discarded.
     tmp="$(mktemp -d)"
-    CONF_DIR="$tmp" USER_CONF="$tmp/u.json" CREDS_CONF="$tmp/c.json"
+    export CONF_DIR="$tmp" USER_CONF="$tmp/u.json" CREDS_CONF="$tmp/c.json"
     write_config "/dev/null" "novaos" "nova" "example" "UTC" "en_US.UTF-8" "btrfs" "desktop"
+
     for f in "$USER_CONF" "$CREDS_CONF"; do
-      python3 -c "import json,sys; json.load(open(sys.argv[1])); print('valid JSON:', sys.argv[1])" "$f" \
+      python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" \
         || die "generated invalid JSON: $f"
     done
+    say "well-formed JSON: ok"
+
+    if have archinstall; then
+      # --dry-run parses and plans but writes nothing.
+      if archinstall --config "$USER_CONF" --creds "$CREDS_CONF" --dry-run >"$tmp/out" 2>&1; then
+        say "archinstall accepted the config: ok"
+      else
+        warn "archinstall REJECTED the generated config:"
+        tail -20 "$tmp/out" | sed 's/^/    /' >&2
+        die "nova-setup --check: FAILED"
+      fi
+    else
+      dim "archinstall not installed — skipped schema validation."
+      dim "Install it to get the full check:  pacman -S archinstall"
+    fi
+
     rm -rf "$tmp"
     say "nova-setup --check: OK"
     ;;

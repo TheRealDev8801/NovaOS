@@ -102,6 +102,30 @@ cannot stall the boot.
 
 ## The setup wizard
 
+The wizard lives in **two places**, and this has already caused a silent bug:
+
+| Path | Role |
+|---|---|
+| `nova-setup/nova-setup` | the source you edit |
+| `releng/novaos-*/airootfs/usr/local/bin/nova-setup` | **the copy the ISO ships** |
+
+`mkarchiso` builds from `airootfs`, so **editing `nova-setup/nova-setup` alone
+changes nothing in any ISO.** An earlier fix to the archinstall config was made
+in the source and never reached a build: the resulting ISO had the corrected
+executable bit but the *old, broken* config, which is the worst of both — it
+looks fixed.
+
+`releng/build.sh` now copies the source into every profile before building and
+then **fails the build** if any shipped copy differs. To sync by hand:
+
+```bash
+cd releng
+for d in novaos-*/airootfs/usr/local/bin; do
+  cp -f ../nova-setup/nova-setup ../nova-setup/nova-first-login "$d/"
+  chmod 755 "$d"/nova-{setup,first-login}
+done
+```
+
 `nova-setup/nova-setup` offers **Try** or **Install**:
 
 ```bash
@@ -111,8 +135,11 @@ nova-setup --install  # straight to the installer
 nova-setup --check    # validate config generation, touch no disks
 ```
 
-`--check` is the one to run after editing the script — it writes both config
-files to a temp dir and parses them as JSON.
+`--check` is the one to run after editing the script. It writes both config
+files to a temp dir, confirms they parse, and — when `archinstall` is available —
+runs `archinstall --dry-run` against them so a wrong field name is caught here
+rather than during a real install.
+
 
 ### Why archinstall and not Calamares
 
@@ -130,11 +157,71 @@ has no opinion about (wheel sudo access, branding, SDDM autologin) in
 `post_install()`.
 
 **Caveat:** the archinstall config schema is version-specific and changes
-between releases. The generated JSON is checked for *valid JSON*, not for
-*schema correctness*. After a major archinstall upgrade, test a real install
-before shipping.
+between releases. `nova-setup --check` therefore does not merely check that the
+JSON parses — when `archinstall` is present it hands the generated config to
+`archinstall --dry-run` and fails if archinstall rejects it. That is the only
+check that catches a wrong field name or a wrong type.
 
-### First-login helper
+It is worth knowing *why* that matters, because it already bit once. Field names
+in this schema are not the obvious ones:
+
+| Looks right | Actually |
+|---|---|
+| `"bootloader": "systemd-bootctl"` | `bootloader_config.bootloader` = `"Systemd-boot"` |
+| `"audio": "pipewire"` | `app_config.audio_config.audio` |
+| `"profile": {...}` | `profile_config` |
+| `"swap": true` | `swap`: `{enabled, algorithm}` |
+| `"parallel downloads": 5` | `pacman_config.parallel_downloads` |
+| `locale_config` with `sys_lang` only | needs `sys_lang` **and** `sys_enc` |
+| partition without `status` | needs `dev_path`, `flags`, `status: "create"` |
+| user with a `groups` list | `sudo: true` |
+
+And one trap that is not obvious at all: **`plymouth` under `bootloader_config`
+takes a theme *name*, not a boolean** — and only archinstall's own themes
+(`bgrt`, `fade-in`, `glow`, `script`, `solar`, `spinner`, `spinfinity`,
+`tribar`, `text`, `details`). It hard-exits on anything else, so passing
+`true`, or `nova-starlight`, aborts the install. The NovaOS splash is therefore
+installed and enabled by `post_install()` instead, which is the right place for
+custom branding anyway.
+
+After a major archinstall upgrade, run `nova-setup --check` before shipping.
+
+## Installing files into the live system: permissions are not preserved
+
+archiso does **not** copy `airootfs` permissions verbatim. Anything not named in
+the profile's `file_permissions` array gets the default — which is `0644`, not
+executable. So an executable in the source tree arrives in the ISO as
+`-rw-r--r--`.
+
+This bit us: `nova-setup` and `nova-first-login` were `0755` in the repo and
+`0644` inside the ISO, so running the installer gave
+
+```
+-bash: /usr/local/bin/nova-setup: Permission denied
+```
+
+The fix is to declare the mode in `profiledef.sh`:
+
+```bash
+file_permissions=(
+  ["/etc/shadow"]="0:0:400"
+  ["/root"]="0:0:750"
+  ["/usr/local/bin/nova-setup"]="0:0:755"
+  ["/usr/local/bin/nova-first-login"]="0:0:755"
+)
+```
+
+To check what actually landed in a built ISO, rather than trusting the source
+tree:
+
+```bash
+unsquashfs -l airootfs.sfs | grep nova-setup     # present?
+# and extract one to see the mode:
+unsquashfs -d /tmp/x airootfs.sfs usr/local/bin/nova-setup
+ls -l /tmp/x/usr/local/bin/nova-setup
+```
+
+## The first-login helper
 
 `nova-setup/nova-first-login` runs from `etc/xdg/autostart/` on the desktop
 editions. It offers the wizard **once**, then writes a marker
