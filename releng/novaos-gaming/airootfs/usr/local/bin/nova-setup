@@ -139,9 +139,10 @@ write_config() {
   # nova-starlight is not in that list, so the splash is installed and enabled
   # by post_install() instead, which is where custom branding belongs anyway.
   #
-  # After editing, run:  nova-setup --check   (valid JSON)
-  # and validate against the schema itself with:
-  #   archinstall --config <file> --dry-run
+  # After editing, run:  nova-setup --check   (valid JSON + schema)
+  # `--check` invokes archinstall itself; note that a bare `--dry-run` is not
+  # enough to make that non-interactive, it needs `--silent` too or it hangs.
+  # See the --check block at the bottom of this file.
   local locale_lang="${locale%%.*}"   # en_US.UTF-8 -> en_US
   local locale_enc="UTF-8"
   [[ "$locale" == *.* ]] && locale_enc="${locale#*.}"
@@ -420,14 +421,39 @@ case "${1:-}" in
     say "well-formed JSON: ok"
 
     if have archinstall; then
-      # --dry-run parses and plans but writes nothing.
-      if archinstall --config "$USER_CONF" --creds "$CREDS_CONF" --dry-run >"$tmp/out" 2>&1; then
-        say "archinstall accepted the config: ok"
-      else
+      # `--dry-run` is NOT a validation-only mode, and on its own it does not
+      # stop archinstall from being interactive: it launches the full curses
+      # TUI and spins forever, never returning. A `--check` that hangs looks
+      # like work in progress rather than a failure, which is worse than one
+      # that errors. --silent is the flag that actually suppresses all prompts.
+      #
+      # The two skip flags matter for a throwaway/containerized check: without
+      # them archinstall blocks on network time and keyring WKD checks that
+      # cannot succeed in a sandbox. `timeout` is the backstop — if a future
+      # archinstall changes its flags again, the check must still terminate.
+      #
+      # Plain assignment, not `local`: this block lives in a top-level `case`,
+      # not a function, and `local` outside a function is a bash error that
+      # aborts the check before archinstall is ever reached.
+      rc=0
+      timeout 300 archinstall \
+        --config "$USER_CONF" --creds "$CREDS_CONF" \
+        --silent --dry-run \
+        --skip-ntp --skip-wkd --skip-boot --skip-version-check --skip-wifi-check \
+        >"$tmp/out" 2>&1 || rc=$?
+
+      # 124 is `timeout`'s own exit code, i.e. archinstall never returned.
+      # Distinguished from a rejection so the message is not misleading.
+      if (( rc == 124 )); then
+        warn "archinstall did not return within 300s (likely prompted or hung)."
+        tail -20 "$tmp/out" | sed 's/^/    /' >&2
+        die "nova-setup --check: TIMED OUT"
+      elif (( rc != 0 )); then
         warn "archinstall REJECTED the generated config:"
         tail -20 "$tmp/out" | sed 's/^/    /' >&2
         die "nova-setup --check: FAILED"
       fi
+      say "archinstall accepted the config: ok"
     else
       dim "archinstall not installed — skipped schema validation."
       dim "Install it to get the full check:  pacman -S archinstall"

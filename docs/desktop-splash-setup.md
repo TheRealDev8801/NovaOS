@@ -136,9 +136,18 @@ nova-setup --check    # validate config generation, touch no disks
 ```
 
 `--check` is the one to run after editing the script. It writes both config
-files to a temp dir, confirms they parse, and — when `archinstall` is available —
-runs `archinstall --dry-run` against them so a wrong field name is caught here
-rather than during a real install.
+files to a temp dir, confirms they parse, then — when `archinstall` is available —
+hands them to archinstall so a wrong field name is caught here rather than during
+a real install.
+
+> **A bare `archinstall --dry-run` is not enough**, and getting this wrong hangs
+> the check forever. `--dry-run` means "don't install", *not* "run
+> non-interactively": without `--silent`, archinstall still starts its curses
+> TUI, spins at 100% CPU and never returns. The invocation also passes
+> `--skip-ntp --skip-wkd --skip-version-check --skip-wifi-check`, because those
+> checks cannot succeed in a sandbox, and is wrapped in `timeout 300` so a future
+> flag change surfaces as a timeout (exit 124) rather than a hang. A check that
+> hangs is worse than one that fails: it looks like progress.
 
 
 ### Why archinstall and not Calamares
