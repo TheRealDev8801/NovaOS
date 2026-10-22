@@ -41,10 +41,40 @@ check_wizard_synced() {
   done
 }
 
+# Refuse to build if the target package lists embedded in the wizard name
+# packages this edition does not ship. write_config() emits those names into
+# archinstall's "packages" array; if one is wrong the install either fails or,
+# worse, produces a desktop with holes in it. Checked against packages.x86_64
+# so the two can never drift.
+check_target_packages() {
+  local profile="$1" edition="$2" arrs list pkg missing=0
+  arrs="$(awk '/^TARGET_(COMMON|DESKTOP|GAMING|SERVER)=\(/{f=1} f{print} f&&/^\)/{f=0}' ../nova-setup/nova-setup)"
+  if [[ -z "$arrs" ]]; then
+    echo "ERROR: could not read the TARGET_* arrays out of nova-setup" >&2
+    return 1
+  fi
+  list="$(bash -c '
+    eval "$1"
+    case "$2" in
+      desktop|plasma) printf "%s\n" "${TARGET_COMMON[@]}" "${TARGET_DESKTOP[@]}" ;;
+      gaming)         printf "%s\n" "${TARGET_COMMON[@]}" "${TARGET_DESKTOP[@]}" "${TARGET_GAMING[@]}" ;;
+      server)         printf "%s\n" "${TARGET_COMMON[@]}" "${TARGET_SERVER[@]}" ;;
+    esac
+  ' _ "$arrs" "$edition")" || return 1
+  for pkg in $list; do
+    if ! grep -qx -- "$pkg" "${profile}/packages.x86_64"; then
+      echo "ERROR: ${profile}: nova-setup installs '${pkg}', which is not in packages.x86_64" >&2
+      return 1
+    fi
+  done
+  echo "==> ${profile}: target package list matches packages.x86_64 ($(wc -w <<< "$list") packages)"
+}
+
 build() {
   local profile="$1" iso rc=0
   local outdir="$(cd "$(pwd)/../out" && pwd)"
   echo "==> Building NovaOS ISO: ${profile}"
+  check_target_packages "$profile" "${profile#novaos-}" || return 1
   # Do NOT detect the fresh ISO with `find -newer <stamp>`. mkarchiso sets
   # SOURCE_DATE_EPOCH for reproducible builds, so the ISO's mtime can be OLDER
   # than a stamp taken at build start — the ordering is not guaranteed and the
@@ -141,6 +171,37 @@ build() {
           fi
         fi
       done
+      # The ISO must ship at least one usable pacman mirror. Every NovaOS ISO
+      # so far had all 425 mirrors commented out, so archinstall died at its
+      # first step ("Fetching Arch Linux package database") and the install was
+      # impossible. Assert it here rather than on a user's machine.
+      local mex="${tmpd2}/x-mirrorlist" servers
+      rm -rf "$mex"
+      unsquashfs -d "$mex" "${tmpd2}/root.sfs" etc/pacman.d/mirrorlist >/dev/null 2>&1 || true
+      if [[ -f "${mex}/etc/pacman.d/mirrorlist" ]]; then
+        servers="$(grep -c '^Server' "${mex}/etc/pacman.d/mirrorlist" 2>/dev/null || true)"
+        if [[ "${servers:-0}" -eq 0 ]]; then
+          echo "ERROR: ${profile}: /etc/pacman.d/mirrorlist has no active Server= lines" >&2
+          echo "       archinstall would fail instantly. Missing airootfs/etc/pacman.d/hooks/uncomment-mirrors.hook?" >&2
+          bad=1
+        else
+          echo "==> ${profile}: ${servers} active pacman mirrors"
+        fi
+      else
+        echo "ERROR: ${profile}: could not extract the mirrorlist from the ISO to check it" >&2
+        bad=1
+      fi
+
+      # The installer picks its package list from this marker. If it is missing
+      # or wrong, a Gaming ISO would install as Plasma (or vice versa).
+      local eex="${tmpd2}/x-novaos-release"
+      rm -rf "$eex"
+      unsquashfs -d "$eex" "${tmpd2}/root.sfs" etc/novaos-release >/dev/null 2>&1 || true
+      if ! grep -qx "EDITION=\"${profile#novaos-}\"" "${eex}/etc/novaos-release" 2>/dev/null; then
+        echo "ERROR: ${profile}: /etc/novaos-release is missing or EDITION is not \"${profile#novaos-}\"" >&2
+        bad=1
+      fi
+
       if (( bad )); then
         rm -rf "$tmpd2"
         return 1

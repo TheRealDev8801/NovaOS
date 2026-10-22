@@ -90,7 +90,7 @@ qemu-img create -f qcow2 novaos.qcow2 16G
 qemu-system-x86_64 \
   -cpu max -smp 2 -m 2048 -machine q35,accel=tcg \
   -drive file=novaos.qcow2,if=virtio,cache=writeback \
-  -drive file=novagos-plasma.iso,media=cdrom,readonly=on -boot order=d \
+  -drive file=novagos-plasma.iso,media=cdrom,readonly=on,file.locking=off -boot order=d \
   -device virtio-gpu-pci \
   -nic user,model=virtio-net-pci \
   -vnc :1 -display none
@@ -98,6 +98,11 @@ qemu-system-x86_64 \
 
 Then open a VNC client on the phone to `127.0.0.1:5901` (Termux) or the device
 IP if the client is a separate app. Notes:
+
+- `file.locking=off` on the ISO drive is required on Android: the default
+  locking produces `Failed to get "consistent read" lock`. It is a host-side
+  Android/QEMU issue, not something in the ISO, and it behaves the same in every
+  Android VM app.
 
 - Prefer `cache=writeback` and a qcow2 disk — live ISO reads are slow under TCG.
 - Skip `-enable-kvm`, `-cpu host`, and `gl=on` (unsupported on Android).
@@ -116,9 +121,18 @@ IP if the client is a separate app. Notes:
 | VirtIO disk/net/GPU | in-kernel modules (linux) |
 | 3D acceleration | `mesa` + VirGL (`virtio-vga-gl`) |
 
-## Vectras VM (Android)
+## Vectras VM, Limbo, aQEMU — and Termux
 
-Vectras on Android typically runs QEMU with TCG (no KVM). Key notes:
+These are front-ends, not emulators: each one launches `qemu-system-x86_64` under
+the hood. So **the same ISO, the same flags and the same failures apply to all of
+them.** When something breaks in two different Android VM apps, the common factor
+is the QEMU invocation or the image — not the app.
+
+We have already got this wrong once: a failure was blamed on Vectras that turned
+out to be identical in Termux, and was fixed by changing the invocation. Start
+from the command line, not the app.
+
+Key notes:
 
 - **Use the right ISO**: `novagos-plasma-*.iso` or `novagos-gaming-*.iso` both
   ship the KDE Plasma desktop (autologin as user `nova`). `novagos-server-*.iso`
@@ -152,8 +166,8 @@ than assuming the image is broken.
 
 `-vga std` is still fine for **NovaOS Server**, which has no desktop.
 
-Quick Vectras settings suggestion:
-- ISO: `novagos-plasma-2026.10.21-x86_64.iso`
+Quick settings suggestion (any Android QEMU app):
+- ISO: `novagos-plasma-2026.10.22-x86_64.iso`
 - Disk: qcow2, >= 32GB
 - RAM: 4096 MB (if available)
 - CPU cores: 2-4

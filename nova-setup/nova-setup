@@ -76,15 +76,139 @@ choose() {
   if have gum; then
     gum choose --header "$prompt" "$@"
   else
-    say "$prompt"
+    # The menu MUST go to stderr. Every caller does `x="$(choose ...)"`, so
+    # anything written to stdout is captured as the *answer*: the prompt, the
+    # numbered list and the answer all end up concatenated into one string.
+    # That is why the fallback menu "worked" but returned things like
+    # "Not a block device: Select". Only the chosen value may touch stdout.
+    say "$prompt" >&2
     local i=1
-    for o in "$@"; do printf '  %d) %s\n' "$i" "$o"; i=$((i+1)); done
+    for o in "$@"; do printf '  %d) %s\n' "$i" "$o" >&2; i=$((i+1)); done
     local n
     read -r -p "Choose [1]: " n || true
     n="${n:-1}"
     local arr=("$@")
+    # Clamp: a non-numeric or out-of-range reply used to index outside the
+    # array, which under `set -u` aborts the wizard with a cryptic error.
+    [[ "$n" =~ ^[0-9]+$ ]] || n=1
+    (( n < 1 || n > ${#arr[@]} )) && n=1
     printf '%s' "${arr[$((n-1))]}"
   fi
+}
+
+# ── what an installed NovaOS contains ─────────────────────────────────────
+# The packages archinstall should install on the TARGET system. These are a
+# curated subset of the live ISO's packages.x86_64: the live lists also carry
+# medium-only tooling (mkinitcpio-archiso, squashfs-tools, memtest86+,
+# edk2-shell, syslinux ...) that must never end up on a real install.
+#
+# This list exists because write_config() previously emitted "packages": [] and
+# ignored the edition argument entirely, so installing NovaOS Gaming or Plasma
+# produced a bare Arch system — no Plasma, no SDDM, no Steam. build.sh checks
+# that every name below appears in the matching releng/novaos-*/packages.x86_64,
+# so a typo fails the build instead of silently shrinking the desktop.
+TARGET_COMMON=(
+  base linux linux-firmware mkinitcpio
+  dosfstools e2fsprogs btrfs-progs xfsprogs
+  parted gptfdisk cryptsetup lvm2 nvme-cli smartmontools
+  networkmanager openssh rsync sudo nano less bash-completion zsh
+  qemu-guest-agent plymouth grub
+)
+TARGET_DESKTOP=(
+  plasma-desktop kscreen kwallet kwallet-pam kwalletmanager
+  kde-cli-tools kglobalacceld plasma-nm plasma-pa kdeplasma-addons
+  kinfocenter ksystemstats plasma-systemmonitor ksshaskpass
+  kde-gtk-config breeze-gtk
+  konsole dolphin kate ark spectacle gwenview okular kcalc
+  ffmpegthumbs kdegraphics-thumbnailers kdialog
+  sddm
+  pipewire pipewire-pulse pipewire-alsa wireplumber
+  noto-fonts noto-fonts-emoji ttf-liberation
+  mesa vulkan-radeon vulkan-intel vulkan-tools
+  spice-vdagent xf86-video-qxl xdg-user-dirs
+)
+TARGET_GAMING=(
+  gamemode lib32-gamemode mangohud lib32-mangohud gamescope
+  steam wine winetricks
+  lib32-mesa lib32-vulkan-radeon lib32-vulkan-intel
+)
+TARGET_SERVER=(
+  docker podman buildah skopeo
+)
+
+# UEFI or legacy BIOS? systemd-boot only exists on UEFI, and GRUB on a GPT
+# disk needs a BIOS-boot partition that archinstall's config schema cannot
+# describe, so the two modes need genuinely different install steps.
+firmware_mode() {
+  # NOVAOS_FW is a test hook: it lets the build check both layouts in a
+  # container, which has no /sys/firmware/efi to detect.
+  if [[ -n "${NOVAOS_FW:-}" ]]; then
+    printf '%s' "$NOVAOS_FW"
+    return 0
+  fi
+  if [[ -d /sys/firmware/efi ]]; then
+    printf 'uefi'
+  else
+    printf 'bios'
+  fi
+}
+
+# Which ISO are we running on? Prefer the marker the profiles ship, and fall
+# back to detection so an ISO built before the marker existed still installs
+# the right thing.
+edition_of() {
+  local ed=""
+  if [[ -r /etc/novaos-release ]]; then
+    ed="$(sed -n 's/^EDITION="\{0,1\}\([a-z]*\)"\{0,1\}$/\1/p' /etc/novaos-release | head -n1)"
+  fi
+  if [[ -z "$ed" ]]; then
+    if [[ -x /usr/bin/steam ]]; then
+      ed="gaming"
+    elif [[ -x /usr/bin/plasmashell ]]; then
+      ed="plasma"
+    else
+      ed="server"
+    fi
+  fi
+  printf '%s' "$ed"
+}
+
+# Print the target package list, one per line. "desktop" is accepted as an
+# alias so `nova-setup --check` can validate without guessing an edition.
+target_packages() {
+  case "$1" in
+    desktop|plasma)
+      printf '%s\n' "${TARGET_COMMON[@]}" "${TARGET_DESKTOP[@]}" ;;
+    gaming)
+      printf '%s\n' "${TARGET_COMMON[@]}" "${TARGET_DESKTOP[@]}" "${TARGET_GAMING[@]}" ;;
+    server)
+      printf '%s\n' "${TARGET_COMMON[@]}" "${TARGET_SERVER[@]}" ;;
+    *)
+      die "unknown edition: $1" ;;
+  esac
+}
+
+# archinstall starts by syncing the package database. Every NovaOS ISO shipped
+# with all 425 mirrors in /etc/pacman.d/mirrorlist commented out, because the
+# archiso hook that uncomments them was missing from the profiles — so the sync
+# failed and the install died in two seconds with "Failed to sync Arch Linux
+# package database". The profiles ship the hook now; this is the belt-and-
+# braces for an ISO that predates the fix.
+ensure_mirrors() {
+  local ml="/etc/pacman.d/mirrorlist"
+  if [[ -r "$ml" ]] && grep -q '^Server' "$ml"; then
+    return 0
+  fi
+  warn "No active pacman mirror found (the shipped mirrorlist has none enabled)."
+  warn "Writing a known-good HTTPS mirrorlist so the install can proceed."
+  mkdir -p /etc/pacman.d
+  cat > "$ml" <<'EOF'
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+Server = https://fastly.mirror.pkgbuild.com/$repo/os/$arch
+Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
+Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch
+EOF
+  pacman -Sy --noconfirm >/dev/null 2>&1 || warn "pacman -Sy still failing — check the network before installing."
 }
 
 # ── disk discovery ────────────────────────────────────────────────────────
@@ -133,11 +257,14 @@ write_config() {
   #   * there is no top-level "parallel downloads"; it is
   #     pacman_config.parallel_downloads
   #
-  # Note the absent "plymouth" key. archinstall accepts it, but only as one of
-  # ITS OWN theme names (bgrt, fade-in, glow, script, solar, spinner,
-  # spinfinity, tribar, text, details) — it rejects anything else and exits.
-  # nova-starlight is not in that list, so the splash is installed and enabled
-  # by post_install() instead, which is where custom branding belongs anyway.
+  # Note the "plymouth": "spinner" key. archinstall accepts it ONLY as one of
+  # ITS OWN theme names (bgrt, fade-in, glow, script, solar, spinner, spinfinity,
+  # tribar, text, details) — anything else makes it exit. We deliberately pass a
+  # built-in name so archinstall does the mechanical work: it installs plymouth,
+  # appends `splash quiet` to the kernel command line, inserts the plymouth
+  # initramfs hook, and runs `mkinitcpio -P`. post_install() then swaps in
+  # nova-starlight and rebuilds once more. Passing "nova-starlight" here would
+  # be rejected, which is how an earlier build failed outright.
   #
   # After editing, run:  nova-setup --check   (valid JSON + schema)
   # `--check` invokes archinstall itself; note that a bare `--dry-run` is not
@@ -146,6 +273,112 @@ write_config() {
   local locale_lang="${locale%%.*}"   # en_US.UTF-8 -> en_US
   local locale_enc="UTF-8"
   [[ "$locale" == *.* ]] && locale_enc="${locale#*.}"
+
+  # Build the edition's package array. archinstall installs `packages` on top of
+  # the profile below, which is why the profile can stay Minimal.
+  local pkg_list=() p pkg_json=""
+  while IFS= read -r p; do
+    [[ -n "$p" ]] && pkg_list+=("$p")
+  done < <(target_packages "$edition")
+  for p in "${pkg_list[@]}"; do
+    pkg_json+="${pkg_json:+, }\"$p\""
+  done
+
+  # Firmware decides the bootloader and therefore the partition layout.
+  # Choosing systemd-boot on a BIOS machine — which this used to do
+  # unconditionally — produces an installed system that cannot boot at all.
+  local fw bootloader
+  fw="$(firmware_mode)"
+  if [[ "$fw" == "uefi" ]]; then
+    bootloader="Systemd-boot"
+  else
+    bootloader="No bootloader"     # GRUB is installed by post_install().
+  fi
+
+  # Both layouts are GPT.
+  #   UEFI: 512 MiB ESP at /boot, then root. systemd-boot lives on the ESP.
+  #   BIOS: 1 MiB BIOS-boot partition, 512 MiB /boot, then root. archinstall's
+  #         GRUB step calls `grub-install --target=i386-pc`, which on GPT needs
+  #         a partition typed "BIOS boot" — and its JSON schema has no way to
+  #         express that flag (PartitionFlag has no BIOS_GRUB). Rather than
+  #         emit a layout whose install aborts, we hand the bootloader step to
+  #         post_install(), which can set the type with sgdisk and then run
+  #         grub-install itself.
+  local partitions_json
+  if [[ "$fw" == "uefi" ]]; then
+    partitions_json="$(cat <<JSON
+      {
+        "btrfs": [],
+        "dev_path": null,
+        "flags": ["boot"],
+        "fs_type": "fat32",
+        "mount_options": [],
+        "mountpoint": "/boot",
+        "obj_id": "nova-boot-0001",
+        "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 512 },
+        "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
+        "status": "create",
+        "type": "primary"
+      },
+      {
+        "btrfs": [],
+        "dev_path": null,
+        "flags": [],
+        "fs_type": "$fs",
+        "mount_options": [],
+        "mountpoint": "/",
+        "obj_id": "nova-root-0002",
+        "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 0 },
+        "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 513 },
+        "status": "create",
+        "type": "primary"
+      }
+JSON
+)"
+  else
+    partitions_json="$(cat <<JSON
+      {
+        "btrfs": [],
+        "dev_path": null,
+        "flags": [],
+        "fs_type": null,
+        "mount_options": [],
+        "mountpoint": null,
+        "obj_id": "nova-bios-0001",
+        "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
+        "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
+        "status": "create",
+        "type": "primary"
+      },
+      {
+        "btrfs": [],
+        "dev_path": null,
+        "flags": ["boot"],
+        "fs_type": "ext4",
+        "mount_options": [],
+        "mountpoint": "/boot",
+        "obj_id": "nova-boot-0002",
+        "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 512 },
+        "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 2 },
+        "status": "create",
+        "type": "primary"
+      },
+      {
+        "btrfs": [],
+        "dev_path": null,
+        "flags": [],
+        "fs_type": "$fs",
+        "mount_options": [],
+        "mountpoint": "/",
+        "obj_id": "nova-root-0003",
+        "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 0 },
+        "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 514 },
+        "status": "create",
+        "type": "primary"
+      }
+JSON
+)"
+  fi
 
   mkdir -p "$CONF_DIR"
   chmod 700 "$CONF_DIR"
@@ -163,7 +396,7 @@ write_config() {
   "debug": false,
   "silent": false,
   "no_pkg_lookups": false,
-  "packages": [],
+  "packages": [$pkg_json],
   "swap": { "enabled": true, "algorithm": "zstd" },
   "pacman_config": { "color": false, "parallel_downloads": 5 },
   "locale_config": {
@@ -172,9 +405,10 @@ write_config() {
     "sys_enc": "$locale_enc"
   },
   "bootloader_config": {
-    "bootloader": "Systemd-boot",
+    "bootloader": "$bootloader",
     "uki": false,
-    "removable": false
+    "removable": false,
+    "plymouth": "spinner"
   },
   "app_config": {
     "audio_config": { "audio": "pipewire" }
@@ -190,34 +424,7 @@ write_config() {
       {
         "device": "$disk",
         "wipe": true,
-        "partitions": [
-          {
-            "btrfs": [],
-            "dev_path": null,
-            "flags": ["boot"],
-            "fs_type": "fat32",
-            "mount_options": [],
-            "mountpoint": "/boot",
-            "obj_id": "nova-boot-0001",
-            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 512 },
-            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
-            "status": "create",
-            "type": "primary"
-          },
-          {
-            "btrfs": [],
-            "dev_path": null,
-            "flags": [],
-            "fs_type": "$fs",
-            "mount_options": [],
-            "mountpoint": "/",
-            "obj_id": "nova-root-0002",
-            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 0 },
-            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 513 },
-            "status": "create",
-            "type": "primary"
-          }
-        ]
+        "partitions": [$partitions_json]
       }
     ]
   }
@@ -243,14 +450,25 @@ EOF
   chmod 600 "$CREDS_CONF"
 }
 
+# systemctl-enable without needing the target root mounted in a chroot: create
+# the same .wants symlink systemd would. `systemctl enable` is not usable here
+# because the unit files live under the target, not the running system.
+enable_unit() {
+  local target="$1" unit="$2" want="$3"
+  mkdir -p "$target/etc/systemd/system/${want}.wants"
+  ln -sf "/usr/lib/systemd/system/${unit}" "$target/etc/systemd/system/${want}.wants/${unit}"
+}
+
 # Post-install steps: the things archinstall has no opinion about but NovaOS
 # does. Runs after archinstall succeeds.
 post_install() {
-  local username="$1" root_mnt="$2" edition="$3"
+  local username="$1" root_mnt="$2" edition="$3" disk="$4"
   say "Applying NovaOS defaults to the new system…"
 
   local target="/mnt"
   [[ -d "$root_mnt" ]] && target="$root_mnt"
+  local fw
+  fw="$(firmware_mode)"
 
   # Sudo access for the wheel group — otherwise the new user cannot escalate.
   mkdir -p "$target/etc/sudoers.d"
@@ -260,22 +478,88 @@ post_install() {
   # Bring the same Nova branding the live session uses onto the installed
   # system, so the look survives the install.
   if [[ -d "$target/etc" ]]; then
-    for f in plymouth/plymouthd.conf; do
-      [[ -f "/etc/$f" ]] && mkdir -p "$target/etc/$(dirname "$f")" && cp "/etc/$f" "$target/etc/$f"
-    done
     if [[ -d /usr/share/plymouth/themes/nova-starlight ]]; then
       mkdir -p "$target/usr/share/plymouth/themes"
+      rm -rf "$target/usr/share/plymouth/themes/nova-starlight"
       cp -r /usr/share/plymouth/themes/nova-starlight "$target/usr/share/plymouth/themes/"
     fi
-    # Enable the splash on the installed system's kernel command line.
-    if [[ -f "$target/etc/default/grub" ]] && ! grep -q 'splash' "$target/etc/default/grub"; then
-      sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 splash quiet loglevel=3"/' \
-        "$target/etc/default/grub" || true
+    # Point plymouth at our theme. archinstall installed plymouth with a
+    # built-in theme ("spinner") purely to get the hook, `splash quiet` and the
+    # initramfs wiring in place; this is the swap to NovaOS branding.
+    mkdir -p "$target/etc/plymouth"
+    if [[ -f "$target/etc/plymouth/plymouthd.conf" ]] && grep -q '^\[Daemon\]' "$target/etc/plymouth/plymouthd.conf"; then
+      if grep -q '^Theme=' "$target/etc/plymouth/plymouthd.conf"; then
+        sed -i 's/^Theme=.*/Theme=nova-starlight/' "$target/etc/plymouth/plymouthd.conf"
+      else
+        sed -i '/^\[Daemon\]/a Theme=nova-starlight' "$target/etc/plymouth/plymouthd.conf"
+      fi
+    else
+      printf '[Daemon]\nTheme=nova-starlight\nShowDelay=0\n' > "$target/etc/plymouth/plymouthd.conf"
+    fi
+
+    # Where the splash parameters go depends on the firmware.
+    if [[ "$fw" == "uefi" ]]; then
+      # systemd-boot: one entry file per kernel.
+      local entry
+      for entry in "$target"/boot/loader/entries/*.conf; do
+        [[ -f "$entry" ]] || continue
+        grep -q 'splash' "$entry" && continue
+        sed -i '/^options /s/.*/& splash quiet loglevel=3/' "$entry" || true
+      done
+    else
+      # BIOS: GRUB, generated below. Write the command line before mkconfig.
+      mkdir -p "$target/etc/default"
+      if [[ -f "$target/etc/default/grub" ]]; then
+        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="splash quiet loglevel=3"/' \
+          "$target/etc/default/grub"
+      else
+        printf 'GRUB_CMDLINE_LINUX_DEFAULT="splash quiet loglevel=3"\n' > "$target/etc/default/grub"
+      fi
+    fi
+
+    # archinstall built the initramfs while "spinner" was the theme, so the
+    # image has to be regenerated for nova-starlight to actually appear.
+    if have arch-chroot; then
+      arch-chroot "$target" mkinitcpio -P >/dev/null 2>&1 \
+        || warn "Could not rebuild the initramfs; the splash will fall back to archinstall's theme."
     fi
   fi
 
-  # Make sure the desktop session is available to the new user.
+  # BIOS bootloader. archinstall was told "No bootloader" because its GRUB
+  # path runs `grub-install --target=i386-pc`, which needs a GPT partition
+  # typed "BIOS boot" — and its config schema cannot express that flag. So we
+  # do it here, where sgdisk can set the type first.
+  if [[ "$fw" != "uefi" ]]; then
+    if ! have arch-chroot; then
+      warn "arch-chroot is missing; GRUB was NOT installed and the system will not boot."
+    elif [[ ! -b "$disk" ]]; then
+      warn "Not a block device: $disk — skipping the GRUB install."
+    else
+      say "Installing the GRUB bootloader (BIOS)…"
+      if have sgdisk; then
+        sgdisk --typecode=1:21686148-6449-6E6F-744E-656564454649 "$disk" >/dev/null 2>&1 \
+          || warn "Could not mark partition 1 as a BIOS boot partition; grub-install may fail."
+      else
+        warn "sgdisk is missing; hoping partition 1 is already a BIOS boot partition."
+      fi
+      arch-chroot "$target" grub-install --target=i386-pc --recheck "$disk" \
+        || warn "grub-install failed — the installed system may not boot."
+      arch-chroot "$target" grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 \
+        || warn "grub-mkconfig failed; /boot/grub/grub.cfg may be missing."
+    fi
+  fi
+
+  # Services. A desktop needs a display manager, and a server needs to be
+  # reachable — without this the installed system boots to a bare console even
+  # though every package is present.
+  enable_unit "$target" NetworkManager.service multi-user.target
   if [[ "$edition" != "server" ]]; then
+    # graphical.target starts whatever display-manager.service points at.
+    mkdir -p "$target/etc/systemd/system"
+    ln -sf /usr/lib/systemd/system/sddm.service "$target/etc/systemd/system/display-manager.service"
+    enable_unit "$target" sddm.service graphical.target
+
+    # Autologin into Plasma for the user just created.
     mkdir -p "$target/etc/sddm.conf.d"
     cat > "$target/etc/sddm.conf.d/nova.conf" <<EOF
 [Autologin]
@@ -283,6 +567,9 @@ User=$username
 Session=plasma
 Relogin=false
 EOF
+  else
+    enable_unit "$target" sshd.service multi-user.target
+    enable_unit "$target" docker.service multi-user.target
   fi
 
   say "NovaOS defaults applied."
@@ -313,6 +600,14 @@ install_flow() {
   dim "This will erase the disk you choose. Everything on it will be lost."
   echo
 
+  # The edition drives both the package list and the post-install wiring, so
+  # resolve it once, up front, and say it out loud. It used to be declared but
+  # never assigned, which silently produced an empty package list.
+  local edition
+  edition="$(edition_of)"
+  dim "  Edition    : $edition"
+  echo
+
   # 1. disk
   local disks
   disks="$(list_disks)"
@@ -339,7 +634,7 @@ install_flow() {
 
   # 2. basics
   echo
-  local hostname username password timezone locale fs edition
+  local hostname username password timezone locale fs
   hostname="$(ask "Hostname:" "novaos")"
   username="$(ask "Username:" "nova")"
   while :; do
@@ -371,6 +666,7 @@ install_flow() {
   fi
 
   # 3. configure + install
+  ensure_mirrors
   write_config "$disk" "$hostname" "$username" "$password" "$timezone" "$locale" "$fs" "$edition"
   say "Wrote configuration to $CONF_DIR"
 
@@ -378,14 +674,18 @@ install_flow() {
     die "archinstall is not installed in this live session. Cannot continue."
   fi
 
+  # --silent is not cosmetic. Without it archinstall ignores --config for the
+  # flow and puts its full curses UI (show_menu / confirm_config) on the
+  # terminal, which contradicts "progress is shown below" and cannot be
+  # scripted. With --silent it logs progress to stdout and runs unattended.
   say "Running archinstall. This takes a while — progress is shown below."
   echo
-  if ! archinstall --config "$USER_CONF" --creds "$CREDS_CONF"; then
+  if ! archinstall --config "$USER_CONF" --creds "$CREDS_CONF" --silent; then
     die "archinstall failed. No changes were made to your bootloader; you can retry."
   fi
 
   # 4. post-install
-  post_install "$username" "/mnt" "$edition"
+  post_install "$username" "/mnt" "$edition" "$disk"
 
   echo
   say "Installation complete."
@@ -419,6 +719,9 @@ case "${1:-}" in
         || die "generated invalid JSON: $f"
     done
     say "well-formed JSON: ok"
+    say "  firmware  : $(firmware_mode)"
+    say "  bootloader: $(sed -n 's/.*"bootloader": "\([^"]*\)".*/\1/p' "$USER_CONF" | head -n1)"
+    say "  packages  : $(sed -n 's/.*"packages": \[\(.*\)\],/\1/p' "$USER_CONF" | head -n1 | tr ',' '\n' | wc -l)"
 
     if have archinstall; then
       # `--dry-run` is NOT a validation-only mode, and on its own it does not

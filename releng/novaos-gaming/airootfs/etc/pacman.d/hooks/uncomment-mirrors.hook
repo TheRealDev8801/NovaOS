@@ -1,0 +1,18 @@
+# Enable the HTTPS mirrors the pacman-mirrorlist package ships commented out.
+#
+# Without this hook the built ISO has ZERO active Server= lines, so the very
+# first thing archinstall does — "Fetching Arch Linux package database" — fails
+# and the install aborts in seconds. This hook is copied from archiso's own
+# releng profile, which is where it went missing.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pacman-mirrorlist
+
+[Action]
+Description = Uncommenting HTTPS mirrors in /etc/pacman.d/mirrorlist...
+When = PostTransaction
+Depends = pacman-mirrorlist
+Depends = sed
+Exec = /usr/bin/sed -E -i 's/#(Server = https:)/\1/g' /etc/pacman.d/mirrorlist
