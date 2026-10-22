@@ -28,19 +28,24 @@ No assembly required.
 
 All three editions build and boot.
 
-| Edition | ISO | Size | Desktop | Boots |
+| Edition | ISO | Size | Desktop | State |
 |---|---|---|---|---|
-| **NovaOS Gaming** | `novagos-gaming-2026.10.21-r2-x86_64.iso` | 2.71 GiB | Plasma Nova + gaming stack | ✅ confirmed on real hardware |
-| **NovaOS Plasma** | `novagos-plasma-2026.10.21-r2-x86_64.iso` | 2.33 GiB | Plasma Nova | ✅ hook-verified |
-| **NovaOS Server** | `novagos-server-2026.10.21-r2-x86_64.iso` | 1.54 GiB | console only | ✅ hook-verified |
+| **NovaOS Gaming** | `novagos-gaming-2026.10.22-x86_64.iso` | 2.71 GiB | Plasma Nova + gaming stack | ✅ boots on real hardware; installer unproven |
+| **NovaOS Plasma** | `novagos-plasma-2026.10.22-x86_64.iso` | 2.33 GiB | Plasma Nova | ✅ UEFI boot menu verified; installer unproven |
+| **NovaOS Server** | `novagos-server-2026.10.22-x86_64.iso` | 1.54 GiB | console only | ✅ hook-verified; installer unproven |
+
+"Installer unproven" means the generated archinstall config is validated against
+the real 4.5 schema (`nova-setup --check` accepts it and rejects a bad one), but
+no full install has been run to completion yet.
 
 Download at https://novaos.aibotv2-hosting.biz — SHA256 sums are published
 alongside the images.
 
-The `-r2` suffix is deliberate. The first `2026.10.21` images are still served
-under their original names; overwriting them in place would have handed a stale
-ISO to anyone holding a cached copy. (`r2` adds the desktop, the boot splash and
-`nova-setup`; see [docs/desktop-splash-setup.md](docs/desktop-splash-setup.md).)
+The `2026.10.22` images are the current release and the only ones served; the
+older `2026.10.21` and `-r2` sets have been removed. Version names carry the
+build date rather than a revision suffix, so a filename identifies exactly one
+build — an ISO is never overwritten in place, which would otherwise hand a
+stale image to anyone holding a cached copy.
 
 Every ISO is built with `releng/build-docker.sh` and checked by
 `releng/build.sh`, which refuses to ship an initramfs lacking the archiso hooks
