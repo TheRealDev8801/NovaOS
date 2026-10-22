@@ -186,6 +186,52 @@ custom branding anyway.
 
 After a major archinstall upgrade, run `nova-setup --check` before shipping.
 
+## Build guards, and why a guard that never runs is worse than none
+
+`releng/build.sh` verifies each ISO before declaring success. Every one of those
+checks has, at some point, failed to run while looking perfectly correct — so
+this section exists to stop that recurring.
+
+A check that does not execute is worse than no check, because it converts "we
+don't know" into "verified". All four of these shipped, or nearly did:
+
+| Guard | Why it never ran |
+|---|---|
+| Post-build verification | `mkarchiso` exits non-zero (two chroot pacman hooks cannot run), and `set -e` aborted the script before any check |
+| Fresh-ISO detection | `find -newer <stamp>` — `SOURCE_DATE_EPOCH` makes the ISO's mtime **older** than a stamp taken at build start, so it found nothing and reported "no ISO" for an ISO that existed |
+| Wizard content check | reused one `unsquashfs -d` directory across loop iterations; `unsquashfs` refuses a non-empty target, returned non-zero on the second file, and `set -e` ended the build silently |
+| Wizard sync check | used `cmp`, which is **not installed** in `archlinux:latest`; the missing command made `if ! cmp -s` succeed, failing every build while claiming the files differed |
+
+Three lessons worth keeping:
+
+1. **`set -e` plus a non-zero exit is a silent killer.** Capture the status
+   (`cmd || rc=$?`) when a failure is expected or benign, and prefer testing for
+   the *result* (does this file exist?) over an ordering assumption.
+2. **Do not assume a tool exists.** `cmp` is absent from the build image;
+   `lsinitcpio` is absent, so the initramfs check silently skips there. Prefer
+   `sha256sum`, and log when a check is skipped rather than passing quietly.
+3. **Prove the guard runs, and prove it fails.** A stub that writes a real ISO
+   and exits 1 exercises the whole path without a full rebuild:
+
+```bash
+# in the build container, with PATH pointing at the stub first
+printf '%s\n' '#!/bin/bash' 'cp /seed.iso /novaos/out/novagos-<profile>-<ver>-x86_64.iso' 'exit 1' \
+  > /tmp/stub/mkarchiso && chmod +x /tmp/stub/mkarchiso
+PATH=/tmp/stub:$PATH bash build.sh <profile>     # expect guards to run, exit 0
+```
+
+Then break the input deliberately (append a byte to a profile's shipped script)
+and confirm the guard fails. A guard you have only seen pass is not evidence.
+
+### Note on `mkarchiso`'s exit status
+
+`mkarchiso` returns non-zero on every build because two pacman hooks cannot run
+inside the chroot: `Updating journal message catalog` (`journalctl
+--update-catalog`) and `Updating the appstream cache` (`appstreamcli refresh`).
+Both need a running system. The ISO is written *before* that point — look for
+`Written to medium ... completed successfully` — so a non-zero exit with the ISO
+present is normal and must not be treated as fatal.
+
 ## Installing files into the live system: permissions are not preserved
 
 archiso does **not** copy `airootfs` permissions verbatim. Anything not named in
